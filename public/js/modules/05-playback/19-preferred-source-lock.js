@@ -1,9 +1,13 @@
 // ============================================================
 // Preferred playback source lock
-// A manual source switch becomes the preferred source for later tracks.
-// The preference is local to this browser and survives reloads.
+//
+// Once the user manually switches the current track to a source,
+// remember that provider in localStorage and use it for subsequent
+// tracks. The preference survives page reloads.
 // ============================================================
 (function installPreferredPlaybackSourceLock() {
+  'use strict';
+
   var STORAGE_KEY = 'mineradio-preferred-playback-provider';
   var VALID_PROVIDERS = ['netease', 'qq', 'kugou', 'qishui', 'spotify'];
 
@@ -28,19 +32,43 @@
     } catch (e) {}
   }
 
-  // Expose the helpers so the rest of the playback code can inspect/update
-  // the preference without introducing another global storage convention.
+  function isExcludedSong(song) {
+    if (!song) return true;
+    if (song.isLocal || song.localFile || song.localPath || song.filePath || song.localUrl) return true;
+    var type = String(song.type || '').toLowerCase();
+    return type === 'local' || type === 'podcast' || type === 'program';
+  }
+
+  function getSongProvider(song) {
+    if (typeof window.songProviderKey === 'function') {
+      return normalizeProvider(window.songProviderKey(song));
+    }
+    if (song && (song.provider === 'qq' || song.source === 'qq' || song.type === 'qq')) return 'qq';
+    if (song && (song.provider === 'kugou' || song.source === 'kugou' || song.type === 'kugou' || song.hash || song.audioHash)) return 'kugou';
+    if (song && (song.provider === 'qishui' || song.source === 'qishui' || song.type === 'qishui')) return 'qishui';
+    if (song && (song.provider === 'spotify' || song.source === 'spotify' || song.type === 'spotify' || song.spotifyId || song.spotifyUri)) return 'spotify';
+    return 'netease';
+  }
+
   window.getPreferredPlaybackProvider = getPreferredProvider;
   window.setPreferredPlaybackProvider = setPreferredProvider;
 
-  // Keep the existing manual source switch implementation intact, but record
-  // the provider the user explicitly chose before it starts playback.
+  // The source switcher is already implemented by 07-search.js. We only
+  // record the provider after that function completes and the current queue
+  // entry really has the selected provider. This prevents a failed switch
+  // from changing the persistent preference.
   if (typeof window.switchCurrentSongSource === 'function') {
     var originalSwitchCurrentSongSource = window.switchCurrentSongSource;
     window.switchCurrentSongSource = async function (provider) {
       provider = normalizeProvider(provider);
-      if (provider) setPreferredProvider(provider);
-      return originalSwitchCurrentSongSource.apply(this, arguments);
+      var result = await originalSwitchCurrentSongSource.apply(this, arguments);
+      if (provider && Array.isArray(window.playQueue) && typeof window.currentIdx !== 'undefined') {
+        var current = window.playQueue[window.currentIdx];
+        if (current && getSongProvider(current) === provider && !isExcludedSong(current)) {
+          setPreferredProvider(provider);
+        }
+      }
+      return result;
     };
   }
 
@@ -50,40 +78,42 @@
   }
 
   var originalPlayQueueAt = window.playQueueAt;
+  var matchSerial = 0;
 
   window.playQueueAt = async function (idx, opts) {
     opts = opts || {};
 
-    // Never interfere with explicit source-switch playback or with calls that
-    // have already been processed by this layer.
-    if (!opts.sourceSwitch && !opts.preferredSourceApplied) {
+    // Manual source-switch playback has already selected its source. Calls
+    // explicitly marked as processed must also pass through untouched.
+    if (!opts.sourceSwitch && !opts.preferredSourceApplied && !opts.skipPreferredSource) {
       var preferred = getPreferredProvider();
       var queue = Array.isArray(window.playQueue) ? window.playQueue : [];
       var song = idx >= 0 && idx < queue.length ? queue[idx] : null;
 
-      if (preferred && song && song.type !== 'local' && song.source !== 'local' && !song.localUrl && song.type !== 'podcast') {
-        var currentProvider = typeof window.songProviderKey === 'function'
-          ? window.songProviderKey(song)
-          : '';
+      if (preferred && song && !isExcludedSong(song)) {
+        var currentProvider = getSongProvider(song);
 
         if (currentProvider !== preferred) {
+          var serial = ++matchSerial;
           try {
             var result = await window.findControlSourceMatchResult(song, preferred);
-            var matched = result && result.song ? result.song : null;
-
-            // If the preferred source has a matching track, replace this queue
-            // entry with that source. If not, leave it untouched so the
-            // project's existing fallback logic can handle it normally.
-            if (matched) {
-              matched.preferredPlaybackProvider = preferred;
-              matched.preferredPlaybackAppliedAt = Date.now();
-              if (typeof window.hydrateCustomCover === 'function') {
-                matched = window.hydrateCustomCover(matched);
+            if (serial === matchSerial) {
+              var matched = result && result.song ? result.song : null;
+              if (matched) {
+                matched.preferredPlaybackProvider = preferred;
+                matched.preferredPlaybackAppliedAt = Date.now();
+                if (typeof window.hydrateCustomCover === 'function') {
+                  matched = window.hydrateCustomCover(matched);
+                }
+                if (Array.isArray(window.playQueue) && idx >= 0 && idx < window.playQueue.length) {
+                  window.playQueue[idx] = matched;
+                  opts.preferredSourceApplied = true;
+                }
               }
-              queue[idx] = matched;
-              opts.preferredSourceApplied = true;
             }
           } catch (err) {
+            // Keep the original queue entry so the existing provider fallback
+            // logic can handle failures exactly as before.
             console.warn('[PreferredSource] match failed:', preferred, err);
           }
         }
