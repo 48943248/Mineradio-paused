@@ -168,6 +168,11 @@ function testCrossPlatformLyricTopUp() {
     '提示复用现有的卡片式提示组件');
   assert.ok(fetchParseText.indexOf('lyricCapabilityNoticeCache[noticeKey]') >= 0,
     '同一平台同一种能力只提示一次，避免每首歌打扰');
+  // 二改：跨平台歌手名常不一致（QQ 用韩文名、网易云用中文名），
+  // 只要求歌手也匹配会让这类歌永远补不到翻译，因此必须支持「同名即命中 + 时长校验」。
+  assert.ok(fetchParseText.indexOf('var sameTitleNorm =') >= 0, '要支持按同名跨歌手匹配');
+  assert.ok(fetchParseText.indexOf('Math.abs(sourceDuration - candidateDuration) > 12000') >= 0,
+    '同名匹配要有时长校验，避免配到同名不同曲');
 }
 
 testTransliterationAliases();

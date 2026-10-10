@@ -306,6 +306,21 @@ async function findNeteaseLyricFallbackCandidate(song) {
   for (var i = 0; i < list.length; i++) {
     if (typeof isSameTitleArtist === 'function' && isSameTitleArtist(song, list[i])) return list[i];
   }
+  // 二改：跨平台的歌手名经常对不上（例如 QQ 用韩文「림킴 (김예림)」、网易云用中文「金艺林」），
+  // 只要求歌手一致会让这类歌永远补不到翻译。这里退一步：歌名完全相同即视为命中；
+  // 若两边都有时长，则再要求时长接近，避免配到「同名不同曲」。
+  var sameTitleNorm = typeof simpleSearchNorm === 'function' ? simpleSearchNorm(song.name || song.title || '') : '';
+  if (sameTitleNorm) {
+    for (var t = 0; t < list.length; t++) {
+      var sameTitleCandidate = list[t];
+      var candidateTitle = sameTitleCandidate && (sameTitleCandidate.name || sameTitleCandidate.title);
+      if (simpleSearchNorm(candidateTitle) !== sameTitleNorm) continue;
+      var sourceDuration = typeof playbackDurationFromSong === 'function' ? Number(playbackDurationFromSong(song)) || 0 : 0;
+      var candidateDuration = typeof playbackDurationFromSong === 'function' ? Number(playbackDurationFromSong(sameTitleCandidate)) || 0 : 0;
+      if (sourceDuration && candidateDuration && Math.abs(sourceDuration - candidateDuration) > 12000) continue;
+      return sameTitleCandidate;
+    }
+  }
   list = list.slice().sort(function (a, b) {
     var sa = typeof scoreSongSearchResult === 'function' ? scoreSongSearchResult(a, query, 0) : 0;
     var sb = typeof scoreSongSearchResult === 'function' ? scoreSongSearchResult(b, query, 0) : 0;
