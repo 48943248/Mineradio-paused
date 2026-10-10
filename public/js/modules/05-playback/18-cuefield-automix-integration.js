@@ -318,6 +318,8 @@ function scheduleCuefieldAutoMixPrepare(token, index, delay, attempt) {
   if (cuefieldAutoMixBlockedByAlbumGapless(currentIndex)) return false;
   var nextIndex = cuefieldAutoMixNextIndex(currentIndex);
   if (nextIndex < 0 || nextIndex === currentIndex) return false;
+  // 二改特性：下一首会被切到用户锁定的默认播放源，跨音源预载过渡没有意义。
+  if (typeof preferredPlaybackSourceBlocksPreload === 'function' && preferredPlaybackSourceBlocksPreload(playQueue[nextIndex])) return false;
   updateCuefieldAutoMixUi('preparing');
   cuefieldAutoMixPrepareTimer = setTimeout(function () {
     cuefieldAutoMixPrepareTimer = 0;

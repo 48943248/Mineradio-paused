@@ -66,8 +66,8 @@
     'js/modules/05-playback/10-queue-actions.js',
     'js/modules/05-playback/11-provider-fallback.js',
     'js/modules/05-playback/12-playback-switch-core.js',
+    'js/modules/05-playback/12a-preferred-playback-source.js',
     'js/modules/05-playback/13-playback-start-audio.js',
-    'js/modules/05-playback/19-preferred-source-lock.js',
     'js/modules/05-playback/14-player-controls.js',
     'js/modules/05-playback/15-control-glass-animations.js',
     'js/modules/05-playback/16-cuefield-automix-core.js',
@@ -115,9 +115,11 @@
     const request = new XMLHttpRequest();
     request.open('GET', path + (path.indexOf('?') >= 0 ? '&' : '?') + 'v=' + moduleCacheBust, false);
     request.send(null);
+
     if ((request.status < 200 || request.status >= 300) && request.status !== 0) {
       throw new Error('Failed to load Mineradio module: ' + path + ' (' + request.status + ')');
     }
+
     return request.responseText;
   }
 

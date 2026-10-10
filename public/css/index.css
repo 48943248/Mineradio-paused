@@ -5579,6 +5579,50 @@ body.home-controls-locked #bottom-bar {
   pointer-events: none
 }
 
+/* 二改：一键切换播放源（全局默认音源） */
+.control-title-badges .preferred-source-chip {
+  border: 1px dashed rgba(255, 255, 255, .28);
+  background: rgba(255, 255, 255, .06);
+  color: rgba(255, 255, 255, .74)
+}
+
+.control-title-badges .preferred-source-chip.active {
+  border-style: solid;
+  border-color: rgba(var(--fc-accent-rgb), .55);
+  background: rgba(var(--fc-accent-rgb), .18);
+  color: #fff
+}
+
+/* 锁定的音源与本首实际播放的不一致（目标平台没版权，已自动改用其它平台） */
+.control-title-badges .preferred-source-chip.source-mismatch {
+  border-color: rgba(255, 186, 92, .62);
+  background: rgba(255, 176, 64, .18);
+  color: #ffd9a0
+}
+
+.control-source-switcher-note.source-mismatch {
+  border-color: rgba(255, 186, 92, .34);
+  background: rgba(255, 176, 64, .10);
+  color: rgba(255, 218, 172, .95)
+}
+
+.control-source-switcher-note {
+  margin-top: 9px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, .06);
+  background: rgba(255, 255, 255, .035);
+  color: rgba(255, 255, 255, .5);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5
+}
+
+.preferred-source-switcher .control-source-options {
+  max-height: 46vh;
+  overflow: auto
+}
+
 .control-artist {
   font-size: 11.5px;
   color: rgba(255, 255, 255, .48);

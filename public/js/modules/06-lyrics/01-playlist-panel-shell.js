@@ -624,6 +624,11 @@ async function refreshUserPlaylists(force) {
     if (userPlaylists.length) renderUserPlaylistsList({ animate: isPlaylistPanelVisibleForRender(), preserveScroll: true });
     return;
   }
+  // 二改：歌单列表（含各平台「我收藏的」）超过 90 秒没同步过，就自动强制刷新一次，
+  // 这样收藏的歌单被别人更新内容后，面板里能看到最新的曲目数。
+  var catalogLastSyncAt = Number(playlistCatalogSyncState.finishedAt || playlistCatalogSyncState.startedAt || 0);
+  var catalogStale = !catalogLastSyncAt || (Date.now() - catalogLastSyncAt) > PLAYLIST_CATALOG_STALE_MS;
+  if (!force && catalogStale && (userPlaylists.length || myPodcastCollections.length)) force = true;
   if (!force && (userPlaylists.length || myPodcastCollections.length)) {
     var cachedAnimate = isPlaylistPanelVisibleForRender();
     renderUserPlaylistsList({ animate: cachedAnimate, preserveScroll: true });
@@ -668,6 +673,7 @@ async function refreshUserPlaylists(force) {
     : Promise.resolve();
   await Promise.allSettled(firstPageTasks.concat([podcastTask]));
   if (playlistCatalogSyncState.token !== token) return;
+  playlistCatalogSyncState.finishedAt = Date.now();
   playlistCatalogSyncState.loading = playlistCatalogHasPendingPages();
   if (userPlaylists.length) renderUserPlaylistsList({ animate: isPlaylistPanelVisibleForRender(), preserveScroll: true });
   if (playlistCatalogSyncState.loading) requestNextPlaylistCatalogPage('after-first-pages');

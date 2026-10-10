@@ -544,7 +544,8 @@ function renderControlSourceSwitcher(matches) {
         '<small>' + cleanStatus + '</small>' +
         '</button>';
     }).join('') +
-    '</div>';
+    '</div>' +
+    '<div class="control-source-switcher-note">' + escHtml('二改：切换后会把该音源记为默认播放源，后续歌曲自动沿用；点播放器上的「音源」按钮可改回自动。') + '</div>';
   controlSourcePositionSwitcher();
 }
 async function findControlSourceMatchResult(song, provider) {
@@ -607,6 +608,8 @@ function toggleControlSourceSwitcher(e) {
     showToast('当前歌曲不支持切换音源');
     return;
   }
+  // 二改特性：两个音源面板互斥，避免重叠。
+  if (typeof closePreferredSourceSwitcher === 'function') closePreferredSourceSwitcher();
   var anchor = e && e.currentTarget ? e.currentTarget : null;
   var el = ensureControlSourceSwitcher();
   if (controlSourceSwitcherState.open && controlSourceSwitcherState.anchor === anchor) {
@@ -623,7 +626,8 @@ function toggleControlSourceSwitcher(e) {
   el.classList.add('show');
   loadControlSourceMatches(song, controlSourceSwitcherState.requestId);
 }
-async function switchCurrentSongSource(provider) {
+async function switchCurrentSongSource(provider, opts) {
+  opts = opts || {};
   provider = normalizePlaybackProvider(provider);
   var song = currentControlSong();
   if (!song) return;
@@ -631,6 +635,8 @@ async function switchCurrentSongSource(provider) {
   var previousSong = cloneSong(song);
   if (provider === currentProvider) {
     closeControlSourceSwitcher();
+    // 二改特性：手动换源即视为“锁定该播放源”，后续歌曲自动沿用。
+    if (opts.skipPreferredLock !== true && typeof lockPreferredPlaybackSource === 'function') lockPreferredPlaybackSource(provider);
     return;
   }
   var requestId = ++controlSourceSwitcherState.requestId;
@@ -667,6 +673,8 @@ async function switchCurrentSongSource(provider) {
       preserveHomeState: true,
       sourceSwitch: true
     });
+    // 二改特性：手动换源成功后，把该音源记为默认播放源，下一首自动沿用。
+    if (opts.skipPreferredLock !== true && typeof lockPreferredPlaybackSource === 'function') lockPreferredPlaybackSource(provider);
   } catch (err) {
     console.warn('[SourceSwitch]', provider, err);
     if (currentIdx >= 0 && currentIdx < playQueue.length) {

@@ -1721,6 +1721,8 @@ function mapKugouPlaylistItem(item) {
     cover: kugouCoverUrl(item.pic || item.img || item.imgurl || item.sizable_cover || item.create_user_pic || '', 240),
     trackCount: Number(item.count || item.m_count || item.song_count || item.total || item.list_count || 0) || 0,
     creator: stripKugouHtml(item.nickname || item.username || item.user_name || item.list_create_username || ''),
+    // 收藏的歌单（别人创建的）与"我创建的"分开，方便面板分组。
+    subscribed: item.__kugouSubscribed === true,
   };
 }
 
@@ -1953,12 +1955,15 @@ function extractKugouGatewayPlaylistLists(data) {
   data = (data && data.data) || data || {};
   if (Array.isArray(data.info)) return data.info;
   const info = data.info || data;
-  return []
-    .concat(Array.isArray(info.collect) ? info.collect : [])
+  // collect = 我收藏的（别人创建的）歌单；love/self/list = 我自己创建或系统默认的。
+  const collected = (Array.isArray(info.collect) ? info.collect : [])
+    .map(item => Object.assign({}, item, { __kugouSubscribed: true }));
+  const owned = []
     .concat(Array.isArray(info.love) ? info.love : [])
     .concat(Array.isArray(info.self) ? info.self : [])
     .concat(Array.isArray(info.list) ? info.list : [])
     .concat(Array.isArray(data.list) ? data.list : []);
+  return collected.concat(owned);
 }
 
 function isKugouFavoritePlaylistName(name) {

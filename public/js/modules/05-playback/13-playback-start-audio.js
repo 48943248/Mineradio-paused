@@ -788,6 +788,11 @@ async function scheduleAlbumGaplessPreloadForCurrent(token, reason) {
   var sourceIdx = currentIdx;
   var nextIdx = sourceIdx + 1;
   var nextSong = playQueue[nextIdx];
+  // 二改特性：下一首会被切到用户锁定的默认播放源，预载原始音源没有意义。
+  if (typeof preferredPlaybackSourceBlocksPreload === 'function' && preferredPlaybackSourceBlocksPreload(nextSong)) {
+    clearAlbumGaplessPreload(reason || 'preferred-source-mismatch');
+    return false;
+  }
   var nextKey = queueItemKey(nextSong);
   if (albumGaplessState.preload && albumGaplessState.preload.index === nextIdx && albumGaplessState.preload.key === nextKey) return true;
   clearAlbumGaplessPreload(reason || 'album-gapless-new-preload');
@@ -1046,6 +1051,20 @@ async function playQueueAt(idx, opts) {
     markPlayPhase('track-setup');
     var song = safePlaybackStep('hydrate-song', function () { return hydrateCustomCover(playQueue[idx]); }) || playQueue[idx];
     playQueue[idx] = song;
+    // 二改特性：先按用户锁定的默认播放源匹配音源，再走原来的播放流程。
+    if (typeof applyPreferredPlaybackSourceAt === 'function') {
+      markPlayPhase('preferred-source');
+      try {
+        var preferredSourceResult = await applyPreferredPlaybackSourceAt(idx, token, opts, song);
+        if (token !== trackSwitchToken || currentIdx !== idx) return false;
+        if (preferredSourceResult && preferredSourceResult.song) {
+          song = preferredSourceResult.song;
+          playQueue[idx] = song;
+        }
+      } catch (preferredSourceError) {
+        console.warn('[PreferredSource] 默认音源匹配失败', preferredSourceError);
+      }
+    }
     var sameAlbumCoverSwitch = albumGaplessSameAlbumCover(previousSongForTransition, song);
     var earlyLyricFetchStarted = false;
     function startTrackLyricFetch() {
@@ -1240,8 +1259,11 @@ async function playQueueAt(idx, opts) {
       var resolvedQualityText = playbackResolvedQualityText(data, playbackProvider);
       var qualityDowngraded = !!(data && data.level && playbackQualityWasDowngraded(requestedQuality, data.level, playbackProvider));
       if (qualityDowngraded) markPlaybackQualityRuntimeCap(song, playbackProvider, data.level, 'resolved-lower');
-      if (!opts.startupAutoplay && !isQQPlayback && qualityDowngraded) {
-        showSourceFallbackNotice((isKugouPlayback ? '酷狗' : (isQishuiPlayback ? '汽水' : '网易云')) + '音质自动降级', '请求 ' + playbackQualityLabel(requestedQuality, playbackProvider) + '，实际播放 ' + resolvedQualityText + '。');
+      // QQ 平时不弹降级提示；只有当用户主动选了会员音质（臻品母带 / 臻品全景声）却没拿到时才提示。
+      var qqMemberTierRequested = isQQPlayback && (requestedQuality === 'jymaster' || requestedQuality === 'spatial');
+      if (!opts.startupAutoplay && qualityDowngraded && (!isQQPlayback || qqMemberTierRequested)) {
+        var downgradePrefix = isQQPlayback ? 'QQ ' : (isKugouPlayback ? '酷狗' : (isQishuiPlayback ? '汽水' : '网易云'));
+        showSourceFallbackNotice(downgradePrefix + '音质自动降级', '请求 ' + playbackQualityLabel(requestedQuality, playbackProvider) + '，实际播放 ' + resolvedQualityText + '。');
       } else if (!opts.startupAutoplay && opts.qualitySwitch) {
         showSourceFallbackNotice('音质已切换', '实际播放: ' + resolvedQualityText + '。');
       }

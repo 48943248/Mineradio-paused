@@ -182,7 +182,11 @@ function qqPlaybackRetryQualities(requestedQuality, resolvedLevel) {
   requestedQuality = normalizePlaybackQualityForProvider(requestedQuality || getProviderPlaybackQuality('qq'), 'qq');
   resolvedLevel = String(resolvedLevel || '').toLowerCase();
   var pool = [];
-  if (requestedQuality === 'jymaster' || requestedQuality === 'hires' || requestedQuality === 'lossless' || resolvedLevel === 'hires' || resolvedLevel === 'lossless') {
+  var memberTier = resolvedLevel === 'jymaster' || resolvedLevel === 'spatial';
+  if (requestedQuality === 'jymaster' || requestedQuality === 'spatial') {
+    // QQ 会员音质（臻品母带 / 臻品全景声）不可用时逐级降档，而不是直接跳到 320k。
+    pool = ['hires', 'lossless', 'exhigh', 'standard'];
+  } else if (memberTier || requestedQuality === 'hires' || requestedQuality === 'lossless' || resolvedLevel === 'hires' || resolvedLevel === 'lossless') {
     pool = ['exhigh', 'standard'];
   } else if (requestedQuality === 'exhigh' || resolvedLevel === 'exhigh') {
     pool = ['standard'];
@@ -649,6 +653,10 @@ async function tryAutoPlaybackFallback(song, data, idx, token, opts) {
   opts = opts || {};
   if (opts.fallbackDepth > 0) {
     if (opts.fallbackOriginalSong && opts.fallbackCandidateSong) {
+      // 二改特性：默认播放源的候选版本播放失败时，短时间内不要对同一首歌重复尝试。
+      if (typeof notePreferredPlaybackSourceFailure === 'function') {
+        notePreferredPlaybackSourceFailure(opts.fallbackOriginalSong, opts.fallbackCandidateSong);
+      }
       restoreSourceFallbackQueueItem(idx, opts.fallbackOriginalSong, opts.fallbackCandidateSong, token);
     }
     return false;
@@ -676,7 +684,10 @@ async function tryAutoPlaybackFallback(song, data, idx, token, opts) {
     return await skipFailedQueueItem(idx, token, '当前歌曲不可播放，且没有其它已登录、已授权的音乐平台可接管。', skipOpts);
   }
   if (!opts.startupAutoplay) {
-    showSourceFallbackNotice('正在自动换源', fromLabel + ' 当前不可播，正在检查 ' + alternateProviders.map(sourceFallbackProviderTitle).join('、') + ' 的同名同歌手版本。');
+    // 二改特性：明确区分"按锁定音源换来的版本没版权"和"原音源自己不可播"，
+    // 免得用户看到"无法播放"却不知道其实已经自动改用了其它平台。
+    var fallbackReason = song && song.__preferredSourceAppliedFor ? '没有该歌曲的播放版权' : '当前不可播';
+    showSourceFallbackNotice('正在自动换源', fromLabel + ' ' + fallbackReason + '，正在检查 ' + alternateProviders.map(sourceFallbackProviderTitle).join('、') + ' 的同名同歌手版本。');
   }
   for (var providerIndex = 0; providerIndex < alternateProviders.length; providerIndex++) {
     var alternateProvider = alternateProviders[providerIndex];
@@ -726,7 +737,18 @@ async function tryAutoPlaybackFallback(song, data, idx, token, opts) {
       if (fallbackToken !== trackSwitchToken) return false;
       if (fallbackStarted === true) {
         completeSourceFallbackRecovery(recovery);
-        if (!opts.startupAutoplay) showSourceFallbackNotice('已自动切换音源', (song.name || '当前歌曲') + ' 已从 ' + fromLabel + ' 切到 ' + targetLabel + '。');
+        // 二改特性：如果失败的是"按锁定音源换来的版本"，记下来，短时间内不再对这首歌重复尝试，
+        // 并把控制栏的「音源」按钮刷新为"锁定 X → 实际 Y"。
+        if (typeof notePreferredPlaybackSourceFailure === 'function' && song && song.__preferredSourceAppliedFor) {
+          notePreferredPlaybackSourceFailure(song);
+          if (typeof updateControlTrackInfo === 'function' && currentIdx >= 0 && currentIdx < playQueue.length) {
+            try { updateControlTrackInfo(playQueue[currentIdx]); } catch (e) { }
+          }
+        }
+        if (!opts.startupAutoplay) {
+          var fallbackPrefix = song && song.__preferredSourceAppliedFor ? (fromLabel + ' 没有该歌曲的播放版权，') : (fromLabel + ' 当前不可播，');
+          showSourceFallbackNotice('已自动切换音源', (song.name || '当前歌曲') + '：' + fallbackPrefix + '已改用 ' + targetLabel + ' 播放。');
+        }
         return true;
       }
       restoreSourceFallbackQueueItem(idx, originalSong, committedCandidate, fallbackToken);

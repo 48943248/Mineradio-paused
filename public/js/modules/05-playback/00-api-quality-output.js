@@ -21,6 +21,7 @@ function escHtml(s) { var d = document.createElement('div'); d.textContent = s; 
 function normalizePlaybackQuality(value) {
   value = String(value || '').toLowerCase();
   if (value === 'jymaster' || value === 'master' || value === 'svip') return 'jymaster';
+  if (value === 'spatial' || value === 'atmos' || value === 'dolby' || value === 'spatialaudio') return 'spatial';
   if (value === 'hires' || value === 'hi-res' || value === 'highres' || value === 'highest') return 'hires';
   if (value === 'lossless' || value === 'flac' || value === 'sq') return 'lossless';
   if (value === 'exhigh' || value === 'high' || value === '320k' || value === 'hq') return 'exhigh';
@@ -37,7 +38,12 @@ function normalizePlaybackProvider(provider) {
 function normalizePlaybackQualityForProvider(value, provider) {
   provider = normalizePlaybackProvider(provider);
   var q = normalizePlaybackQuality(value);
-  if (provider === 'qq' && q === 'jymaster') return 'hires';
+  // 网易云保留「超清母带」（SVIP 档），但没有全景声档位。
+  if (provider === 'netease') return q === 'spatial' ? 'hires' : q;
+  // QQ 音乐新增的会员音质（臻品母带 / 臻品全景声）按 QQ 档位保留。
+  if (provider === 'qq') return q;
+  // 其它平台没有对应档位，回落到 Hi-Res，避免请求到对方不认识的等级。
+  if (q === 'jymaster' || q === 'spatial') return 'hires';
   return q;
 }
 function playbackQualityOptions(provider) {
@@ -70,6 +76,8 @@ function playbackQualityLabel(value, provider) {
   if (provider === 'spotify') return 'Spotify 匹配源';
   if (provider === 'qishui') return '汽水音质';
   if (provider === 'qq') {
+    if (value === 'jymaster') return '臻品母带';
+    if (value === 'spatial') return '臻品全景声';
     if (value === 'hires') return 'Hi-Res FLAC';
     if (value === 'lossless') return '无损 FLAC';
     if (value === 'exhigh') return '320k MP3';
@@ -96,6 +104,8 @@ function playbackQualityShortLabel(value, provider) {
   if (provider === 'spotify') return 'SP';
   if (provider === 'qishui') return 'QS';
   if (provider === 'qq') {
+    if (value === 'jymaster') return 'QQ 母带';
+    if (value === 'spatial') return 'QQ 空间';
     if (value === 'hires') return 'QQ Hires';
     if (value === 'lossless') return 'QQ SQ';
     if (value === 'exhigh') return 'QQ 320';
@@ -116,9 +126,31 @@ function playbackQualityShortLabel(value, provider) {
   if (value === 'standard') return 'STD';
   return '臻音';
 }
+// 会员音质档位：网易云「超清母带」需要 SVIP；QQ「臻品母带 / 臻品全景声」需要 QQ 音乐会员。
+function playbackQualityMemberLabel(provider) {
+  provider = normalizePlaybackProvider(provider);
+  if (provider === 'qq') return 'QQ 音乐 SVIP';
+  if (provider === 'kugou') return '酷狗 SVIP';
+  if (provider === 'qishui') return '汽水音乐会员';
+  if (provider === 'spotify') return 'Spotify Premium';
+  return '网易云 SVIP';
+}
+function playbackQualityMemberReady(provider) {
+  provider = normalizePlaybackProvider(provider);
+  if (provider === 'netease') return hasProviderSvip('netease', loginStatus);
+  var status = typeof platformStatus === 'function' ? (platformStatus(provider) || {}) : {};
+  if (!status.loggedIn) return false;
+  if (
+    provider === 'qq'
+    && (status.membershipKnown === false || status.membershipStale || status.authorizationIncomplete || status.vipSyncState === 'unknown')
+  ) return true;
+  if (typeof hasProviderSvip === 'function' && hasProviderSvip(provider, status)) return true;
+  return typeof hasProviderVip === 'function' && hasProviderVip(provider, status);
+}
 function playbackQualityRank(value, provider) {
   value = normalizePlaybackQualityForProvider(value, provider);
-  if (value === 'jymaster') return 5;
+  if (value === 'jymaster') return 6;
+  if (value === 'spatial') return 5;
   if (value === 'hires') return 4;
   if (value === 'lossless') return 3;
   if (value === 'exhigh') return 2;
@@ -236,6 +268,17 @@ function updatePlaybackQualityUi() {
   var btn = document.getElementById('quality-btn');
   var list = document.getElementById('quality-option-list');
   var canUseSvip = provider === 'netease' && hasProviderSvip('netease', loginStatus);
+  // 没有网易云 SVIP、但账号里有别家会员（例如 QQ SVIP）时，超清母带这一项允许点击：
+  // 点下去会自动把当前歌曲切到那家平台的会员音质档位。
+  var memberFallbackProvider = '';
+  if (provider === 'netease' && !canUseSvip && typeof playbackQualityMemberReady === 'function') {
+    if (playbackQualityMemberReady('qq')) memberFallbackProvider = 'qq';
+    else if (playbackQualityMemberReady('kugou')) memberFallbackProvider = 'kugou';
+  }
+  var svipTierUsable = canUseSvip || !!memberFallbackProvider;
+  var svipTierHint = memberFallbackProvider
+    ? ('需网易云 SVIP · 点此改用 ' + playbackQualityMemberLabel(memberFallbackProvider) + '音质')
+    : '';
   var displayQuality = provider === 'netease' && effectiveQuality === 'jymaster' && !canUseSvip ? 'hires' : effectiveQuality;
   if (label) label.textContent = playbackQualityShortLabel(displayQuality, provider);
   var qualityProviderTitle = provider === 'spotify' ? 'Spotify 匹配源: ' : (provider === 'qishui' ? '汽水音质: ' : (provider === 'qq' ? 'QQ 音质: ' : (provider === 'kugou' ? '酷狗音质: ' : '网易云音质: ')));
@@ -245,20 +288,25 @@ function updatePlaybackQualityUi() {
   if (list) {
     list.innerHTML = playbackQualityOptions(provider).map(function (item) {
       var capLocked = playbackQualityAboveCap(item.key, provider, runtimeCapQuality);
-      var locked = !!(item.svip && !canUseSvip) || capLocked;
-      return '<button class="quality-option' + (item.svip ? ' svip-only' : '') + (capLocked ? ' cap-locked' : '') + (locked ? ' locked' : '') + '" data-quality="' + item.key + '" data-svip="' + (item.svip ? '1' : '0') + '" ' + (locked ? 'disabled ' : '') + 'onclick="setPlaybackQuality(\'' + item.key + '\')"><span>' + escHtml(item.title) + '</span><small>' + escHtml(capLocked ? ('当前最高 ' + playbackQualityLabel(runtimeCapQuality, provider)) : item.sub) + '</small></button>';
+      var locked = !!(item.svip && !svipTierUsable) || capLocked;
+      var subText = capLocked
+        ? ('当前最高 ' + playbackQualityLabel(runtimeCapQuality, provider))
+        : (item.svip && svipTierHint ? svipTierHint : item.sub);
+      return '<button class="quality-option' + (item.svip ? ' svip-only' : '') + (capLocked ? ' cap-locked' : '') + (locked ? ' locked' : '') + '" data-quality="' + item.key + '" data-svip="' + (item.svip ? '1' : '0') + '" ' + (locked ? 'disabled ' : '') + 'onclick="setPlaybackQuality(\'' + item.key + '\')"><span>' + escHtml(item.title) + '</span><small>' + escHtml(subText) + '</small></button>';
     }).join('');
   }
   document.querySelectorAll('.quality-option').forEach(function (option) {
     var q = normalizePlaybackQualityForProvider(option.dataset.quality, provider);
     var capLocked = playbackQualityAboveCap(q, provider, runtimeCapQuality);
-    var locked = (option.dataset.svip === '1' && !canUseSvip) || capLocked;
+    var locked = (option.dataset.svip === '1' && !svipTierUsable) || capLocked;
     option.classList.toggle('active', q === displayQuality);
     option.classList.toggle('locked', locked);
     option.classList.toggle('cap-locked', capLocked);
     option.disabled = locked;
     if (capLocked) option.title = '当前歌曲最高: ' + playbackQualityLabel(runtimeCapQuality, provider);
-    option.title = locked ? '需要网易云 SVIP 账号' : playbackQualityLabel(q, provider);
+    option.title = locked
+      ? '需要网易云 SVIP 账号'
+      : (option.dataset.svip === '1' && svipTierHint ? svipTierHint : playbackQualityLabel(q, provider));
   });
   if (runtimeCapQuality) {
     document.querySelectorAll('.quality-option.cap-locked').forEach(function (option) {
@@ -277,9 +325,29 @@ function setPlaybackQuality(value) {
     return;
   }
   if (provider === 'netease' && next === 'jymaster' && !hasProviderSvip('netease', loginStatus)) {
+    // 没有网易云 SVIP 时，如果账号里有别家会员（QQ / 酷狗），直接把这首切到那家平台的会员音质。
+    var fallbackProvider = '';
+    if (playbackQualityMemberReady('qq')) fallbackProvider = 'qq';
+    else if (playbackQualityMemberReady('kugou')) fallbackProvider = 'kugou';
+    if (fallbackProvider && typeof switchToProviderMemberQuality === 'function') {
+      var fallbackLabel = playbackQualityMemberLabel(fallbackProvider);
+      showSourceFallbackNotice(
+        '改用 ' + fallbackLabel + ' 音质',
+        '当前账号没有网易云 SVIP，检测到你有 ' + fallbackLabel + '，正在把这首歌切到该平台的会员音质档位。'
+      );
+      switchToProviderMemberQuality(fallbackProvider, 'jymaster');
+      return;
+    }
     showToast(hasPlatformLogin('netease') ? '超清母带需要网易云 SVIP' : '登录网易云 SVIP 后可用超清母带');
     if (!hasPlatformLogin('netease')) openProviderLogin('netease');
     return;
+  }
+  // QQ 会员音质允许选择（服务端会按 AI00 → Q000 → RS01 → F000 … 自动降级），只在没有会员时给一次提示。
+  if (provider === 'qq' && (next === 'jymaster' || next === 'spatial') && !playbackQualityMemberReady('qq')) {
+    showSourceFallbackNotice(
+      'QQ 会员音质',
+      playbackQualityLabel(next, 'qq') + ' 需要 ' + playbackQualityMemberLabel('qq') + '；当前账号没有检测到会员权限时会自动降级到可播放的最高档位。'
+    );
   }
   setProviderPlaybackQuality(provider, next);
   updatePlaybackQualityUi();

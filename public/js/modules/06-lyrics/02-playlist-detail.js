@@ -541,7 +541,9 @@ function playlistPanelDetailShellHeight() {
   return PLAYLIST_DETAIL_OUTER_CHROME_HEIGHT + rows * PLAYLIST_DETAIL_ROW_STEP + noticeHeight + footerHeight;
 }
 function playlistPanelGroupKey(pl) {
-  return normalizePlaylistProvider(pl && pl.provider);
+  var provider = normalizePlaylistProvider(pl && pl.provider);
+  // 二改：把「我收藏的歌单」与「我创建的歌单」分开显示。
+  return provider + (pl && pl.subscribed ? '|collect' : '|created');
 }
 function playlistPanelBuildVirtualEntries() {
   var detailSig = [
@@ -556,14 +558,28 @@ function playlistPanelBuildVirtualEntries() {
   if (playlistPanelVirtualCache.revision === playlistCatalogRevision &&
       playlistPanelVirtualCache.detailKey === playlistPanelDetailState.key &&
       playlistPanelVirtualCache.detailSig === detailSig) return playlistPanelVirtualCache;
-  var labels = { mineradio: 'Mineradio 内置歌单', netease: '网易云歌单', qq: 'QQ 音乐歌单', kugou: '酷狗音乐歌单', qishui: '汽水音乐歌单', spotify: 'Spotify 歌单' };
-  var order = ['mineradio', 'netease', 'qq', 'kugou', 'qishui', 'spotify'];
-  var groups = { mineradio: [], netease: [], qq: [], kugou: [], qishui: [], spotify: [] };
+  var labels = {
+    'mineradio|created': 'Mineradio 内置歌单',
+    'netease|created': '网易云 · 我创建的',
+    'netease|collect': '网易云 · 我收藏的',
+    'qq|created': 'QQ 音乐 · 我创建的',
+    'qq|collect': 'QQ 音乐 · 我收藏的',
+    'kugou|created': '酷狗音乐 · 我创建的',
+    'kugou|collect': '酷狗音乐 · 我收藏的',
+    'qishui|created': '汽水音乐 · 我创建的',
+    'qishui|collect': '汽水音乐 · 我收藏的',
+    'spotify|created': 'Spotify · 我创建的',
+    'spotify|collect': 'Spotify · 我收藏的'
+  };
+  var baseOrder = ['mineradio|created', 'netease|created', 'netease|collect', 'qq|created', 'qq|collect', 'kugou|created', 'kugou|collect', 'qishui|created', 'qishui|collect', 'spotify|created', 'spotify|collect'];
+  var groups = {};
   userPlaylists.forEach(function (pl, sourceIndex) {
     var key = playlistPanelGroupKey(pl);
     if (!groups[key]) groups[key] = [];
     groups[key].push({ pl: pl, sourceIndex: sourceIndex });
   });
+  // 未知分组照常显示，避免以后新增平台时歌单被吞掉。
+  var order = baseOrder.concat(Object.keys(groups).filter(function (key) { return baseOrder.indexOf(key) < 0; }));
   var entries = [];
   order.forEach(function (key) {
     var items = (groups[key] || []).sort(function (a, b) {

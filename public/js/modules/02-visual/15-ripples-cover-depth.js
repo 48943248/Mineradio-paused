@@ -547,8 +547,10 @@ function updateControlTrackInfo(song) {
     else title.textContent = song.name || '';
     if (titleBadges) {
       var sourceTag = typeof songSourceTagHtml === 'function' ? songSourceTagHtml(song, { switcher: true }) : '';
+      // 二改特性：播放器上的「一键切换播放源」入口。
+      var preferredSourceTag = typeof preferredSourceChipHtml === 'function' ? preferredSourceChipHtml() : '';
       var vipTag = typeof songVipTagHtml === 'function' ? songVipTagHtml(song) : '';
-      titleBadges.innerHTML = (song && song.name) ? (sourceTag + vipTag) : '';
+      titleBadges.innerHTML = (song && song.name) ? (sourceTag + preferredSourceTag + vipTag) : '';
     }
   }
   if (artist) artist.textContent = song.artist || '';

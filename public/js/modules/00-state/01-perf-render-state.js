@@ -35,6 +35,8 @@ var miniQueueLazyBound = false;
 var PLAYLIST_PANEL_BATCH_SIZE = PLAYLIST_LAZY_BATCH_SIZE;
 var PLAYLIST_CATALOG_FIRST_PAGE_SIZE = PLAYLIST_LAZY_BATCH_SIZE;
 var PLAYLIST_CATALOG_BACKGROUND_PAGE_SIZE = 200;
+// 二改：歌单列表（含各平台「我收藏的」）超过这个时间没同步，就自动重新拉一次。
+var PLAYLIST_CATALOG_STALE_MS = 90 * 1000;
 var PLAYLIST_CARD_VIRTUAL_OVERSCAN_PX = 760;
 var playlistPanelRenderLimit = PLAYLIST_PANEL_BATCH_SIZE;
 var playlistPanelLazyBound = false;

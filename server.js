@@ -1226,6 +1226,8 @@ const NETEASE_SOURCE_MATCH_TOTAL_BUDGET_MS = 8000;
 const NETEASE_SOURCE_MATCH_LOOKUP_BUDGET_MS = 4800;
 const NETEASE_SONG_URL_TOTAL_BUDGET_MS = 12000;
 const QQ_QUALITY_CANDIDATE_TEMPLATES = [
+  { prefix: 'AI00', ext: '.flac', level: 'jymaster', label: '臻品母带' },
+  { prefix: 'Q000', ext: '.flac', level: 'spatial', label: '臻品全景声' },
   { prefix: 'RS01', ext: '.flac', level: 'hires', label: 'Hi-Res FLAC' },
   { prefix: 'F000', ext: '.flac', level: 'lossless', label: '无损 FLAC' },
   { prefix: 'M800', ext: '.mp3', level: 'exhigh', label: '320k MP3' },
@@ -1235,7 +1237,8 @@ const QQ_QUALITY_CANDIDATE_TEMPLATES = [
 function normalizeQualityPreference(value) {
   const raw = String(value || '').toLowerCase().trim();
   if (['jymaster', 'master', 'studio', 'svip'].includes(raw)) return 'jymaster';
-  if (['hires', 'hi-res', 'highres', 'zhenyin', 'spatial'].includes(raw)) return 'hires';
+  if (['spatial', 'atmos', 'dolby', 'spatialaudio', 'quanjing'].includes(raw)) return 'spatial';
+  if (['hires', 'hi-res', 'highres', 'zhenyin'].includes(raw)) return 'hires';
   if (['lossless', 'flac', 'sq'].includes(raw)) return 'lossless';
   if (['exhigh', 'high', '320', '320k', 'hq'].includes(raw)) return 'exhigh';
   if (['standard', 'normal', '128', '128k', 'std'].includes(raw)) return 'standard';
@@ -1341,7 +1344,7 @@ function isQQLikedPlaylistId(id) {
 
 function isQQFavoritePlaylist(pl) {
   if (pl && (isQQLikedPlaylistId(pl.id) || Number(pl.dirid || 0) === QQ_LIKED_DIRID)) return true;
-  const name = String(pl && pl.name || pl && pl.diss_name || '').trim();
+  const name = String((pl && (pl.name || pl.diss_name || pl.dissname)) || '').trim();
   const normalizedName = name.replace(/[·•・_\-\s]+/g, '').toLowerCase();
   return [
     '我喜欢',
@@ -2931,8 +2934,11 @@ function mapQQPlaylist(pl, kind) {
   pl = pl || {};
   const dirid = pl.dirid || pl.dir_id || '';
   const liked = Number(dirid || 0) === QQ_LIKED_DIRID || isQQFavoritePlaylist(pl);
-  const id = liked ? QQ_LIKED_PLAYLIST_ID : (pl.dissid || pl.tid || dirid || pl.id || pl.diss_id);
-  const rawName = pl.diss_name || pl.name || pl.title || '';
+  const id = liked ? QQ_LIKED_PLAYLIST_ID : (pl.dissid || pl.diss_id || pl.tid || dirid || pl.id);
+  // 收藏歌单接口（fcg_get_profile_order_asset 的 cdlist）用的是 dissname / disscover 这种无下划线字段，
+  // 创建歌单接口用的是 diss_name；两边都要兼容，否则收藏歌单会因为"名字为空"被整条丢掉。
+  const rawName = pl.diss_name || pl.dissname || pl.name || pl.title || '';
+  const rawCover = pl.diss_cover || pl.disscover || pl.logo || pl.picurl || pl.cover || '';
   return {
     provider: 'qq',
     source: 'qq',
@@ -2940,10 +2946,10 @@ function mapQQPlaylist(pl, kind) {
     dirid: dirid ? String(dirid) : '',
     virtual: liked,
     name: liked ? QQ_LIKED_PLAYLIST_NAME : (decodeQQCookieValue(rawName) || rawName),
-    cover: liked ? QQ_LIKED_PLAYLIST_COVER : (pl.diss_cover || pl.logo || pl.picurl || pl.cover || ''),
-    trackCount: pl.song_cnt || pl.songnum || pl.total_song_num || pl.song_count || 0,
+    cover: liked ? QQ_LIKED_PLAYLIST_COVER : rawCover,
+    trackCount: pl.song_cnt || pl.songnum || pl.total_song_num || pl.total_song_cnt || pl.song_count || 0,
     playCount: pl.listen_num || pl.visitnum || pl.play_count || 0,
-    creator: pl.hostname || pl.nick || pl.creator || 'QQ 音乐',
+    creator: pl.hostname || pl.nick || pl.creator || pl.username || 'QQ 音乐',
     subscribed: kind === 'collect',
     specialType: liked ? 5 : 0,
     requiresPlaybackKey: false,
@@ -3021,6 +3027,9 @@ async function fetchQQCollectedPlaylists(uin) {
       ein: sin + QQ_PLAYLIST_SYNC_PAGE_SIZE - 1,
     }, { headers: { Referer: 'https://y.qq.com/portal/profile.html' } });
     const rows = body && body.data && Array.isArray(body.data.cdlist) ? body.data.cdlist : [];
+    if (page === 0 && !rows.length) {
+      console.warn('[QQCollected] 收藏歌单返回为空: uin=' + uin + ' code=' + (body && body.code) + ' subcode=' + (body && body.subcode));
+    }
     out.push.apply(out, rows);
     if (rows.length < QQ_PLAYLIST_SYNC_PAGE_SIZE) break;
   }
@@ -3168,6 +3177,13 @@ async function handleQQUserPlaylists() {
   const collectReq = fetchQQCollectedPlaylists(uin);
   const likedReq = getQQLikedPlaylistCard(info);
   const [createdRaw, collectRaw, likedRaw] = await Promise.allSettled([createdReq, collectReq, likedReq]);
+  // 收藏歌单拉取失败时不要把错误吞掉，否则面板上只会看到"没有收藏"。
+  if (createdRaw.status !== 'fulfilled') {
+    console.warn('[QQPlaylists] created playlists failed:', (createdRaw.reason && createdRaw.reason.message) || createdRaw.reason);
+  }
+  if (collectRaw.status !== 'fulfilled') {
+    console.warn('[QQPlaylists] collected playlists failed:', (collectRaw.reason && collectRaw.reason.message) || collectRaw.reason);
+  }
   const created = createdRaw.status === 'fulfilled' && Array.isArray(createdRaw.value)
     ? createdRaw.value.map(pl => mapQQPlaylist(pl, 'created')) : [];
   const collected = collectRaw.status === 'fulfilled' && Array.isArray(collectRaw.value)

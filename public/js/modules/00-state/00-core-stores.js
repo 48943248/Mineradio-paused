@@ -120,6 +120,8 @@ var PLAYBACK_QUALITY_OPTIONS = {
     { key: 'standard', title: '标准', sub: '128kbps' }
   ],
   qq: [
+    { key: 'jymaster', title: '臻品母带', sub: 'QQ SVIP / 最高规格', member: true },
+    { key: 'spatial', title: '臻品全景声', sub: 'QQ SVIP / 空间音频', member: true },
     { key: 'hires', title: 'Hi-Res FLAC', sub: 'QQ 高解析 / 优先尝试' },
     { key: 'lossless', title: '无损 FLAC', sub: 'QQ SQ / 稳定优先' },
     { key: 'exhigh', title: '320k MP3', sub: 'QQ 高品质' },
