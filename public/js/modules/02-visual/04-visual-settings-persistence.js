@@ -169,6 +169,11 @@ function normalizeSavedLyricTranslationMode(mode) {
   mode = String(mode || 'off');
   return /^(off|current|dual|multi)$/.test(mode) ? mode : 'off';
 }
+// 二改：歌词接入平台（含 auto）。
+function normalizeSavedLyricPlatform(value) {
+  var raw = String(value || 'auto');
+  return /^(auto|netease|qq|kugou|qishui)$/.test(raw) ? raw : 'auto';
+}
 // 二改：歌词音译（罗马音/拼音）开关，档位与译文一致。
 function normalizeSavedLyricTransliterationMode(mode) {
   mode = String(mode || 'off');
@@ -196,6 +201,7 @@ function readSavedLyricLayoutCriticalFallback(raw, err) {
     lyricDisplayMode: normalizeSavedLyricDisplayMode(raw.lyricDisplayMode || fxDefaults.lyricDisplayMode),
     lyricTranslationMode: normalizeSavedLyricTranslationMode(raw.lyricTranslationMode || fxDefaults.lyricTranslationMode),
     lyricTransliterationMode: normalizeSavedLyricTransliterationMode(raw.lyricTransliterationMode || fxDefaults.lyricTransliterationMode),
+    lyricPlatform: normalizeSavedLyricPlatform(raw.lyricPlatform || fxDefaults.lyricPlatform),
     lyricMotionStyle: normalizeSavedLyricMotionStyle(raw.lyricMotionStyle || fxDefaults.lyricMotionStyle),
     lyricVerticalFloat: raw.lyricVerticalFloat !== false,
     lyricCustomLineCount: layoutInteger(raw.lyricCustomLineCount, fxDefaults.lyricCustomLineCount, 1, 10),
@@ -267,6 +273,7 @@ function readSavedLyricLayout() {
       lyricDisplayMode: normalizeSavedLyricDisplayMode(raw.lyricDisplayMode || fxDefaults.lyricDisplayMode),
       lyricTranslationMode: normalizeSavedLyricTranslationMode(raw.lyricTranslationMode || fxDefaults.lyricTranslationMode),
       lyricTransliterationMode: normalizeSavedLyricTransliterationMode(raw.lyricTransliterationMode || fxDefaults.lyricTransliterationMode),
+      lyricPlatform: normalizeSavedLyricPlatform(raw.lyricPlatform || fxDefaults.lyricPlatform),
       lyricMotionStyle: normalizeSavedLyricMotionStyle(raw.lyricMotionStyle || fxDefaults.lyricMotionStyle),
       lyricVerticalFloat: raw.lyricVerticalFloat !== false,
       lyricCustomLineCount: layoutInteger(raw.lyricCustomLineCount, fxDefaults.lyricCustomLineCount, 1, 10),
@@ -525,6 +532,7 @@ function currentFxAutosaveTouchedKeys(reason, payload) {
     lyricDisplayMode: ['lyricDisplayMode'],
     lyricTranslationMode: ['lyricTranslationMode'],
     lyricTransliterationMode: ['lyricTransliterationMode'],
+    lyricPlatform: ['lyricPlatform'],
     lyricMotionStyle: ['lyricMotionStyle'],
     lyricVerticalFloat: ['lyricVerticalFloat'],
     lyricGlitchCameraBind: ['lyricGlitchCameraBind'],
@@ -668,6 +676,7 @@ function currentFxAutosaveCriticalPatch() {
     lyricDisplayMode: normalizeSavedLyricDisplayMode(fx.lyricDisplayMode || fxDefaults.lyricDisplayMode),
     lyricTranslationMode: normalizeSavedLyricTranslationMode(fx.lyricTranslationMode || fxDefaults.lyricTranslationMode),
     lyricTransliterationMode: normalizeSavedLyricTransliterationMode(fx.lyricTransliterationMode || fxDefaults.lyricTransliterationMode),
+    lyricPlatform: normalizeSavedLyricPlatform(fx.lyricPlatform || fxDefaults.lyricPlatform),
     lyricMotionStyle: normalizeSavedLyricMotionStyle(fx.lyricMotionStyle || fxDefaults.lyricMotionStyle),
     lyricCustomLineCount: layoutInteger(fx.lyricCustomLineCount, fxDefaults.lyricCustomLineCount, 1, 10),
     lyricGlitchCameraBind: !!fx.lyricGlitchCameraBind,
@@ -760,6 +769,7 @@ function saveLyricLayout(opts) {
       lyricDisplayMode: normalizeSavedLyricDisplayMode(fx.lyricDisplayMode || fxDefaults.lyricDisplayMode),
       lyricTranslationMode: normalizeSavedLyricTranslationMode(fx.lyricTranslationMode || fxDefaults.lyricTranslationMode),
       lyricTransliterationMode: normalizeSavedLyricTransliterationMode(fx.lyricTransliterationMode || fxDefaults.lyricTransliterationMode),
+      lyricPlatform: normalizeSavedLyricPlatform(fx.lyricPlatform || fxDefaults.lyricPlatform),
       lyricMotionStyle: normalizeSavedLyricMotionStyle(fx.lyricMotionStyle || fxDefaults.lyricMotionStyle),
       lyricCustomLineCount: layoutInteger(fx.lyricCustomLineCount, fxDefaults.lyricCustomLineCount, 1, 10),
       lyricGlitchCameraBind: !!fx.lyricGlitchCameraBind,

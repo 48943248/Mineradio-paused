@@ -1049,6 +1049,10 @@ function setLyricTranslationMode(mode) {
 }
 // 二改：歌词平台。点一次即锁定（一键锁定），除非手动切回"跟随音源"或换到别的平台。
 function updateLyricPlatformControls() {
+  // 二改：存档是异步加载的，这里以 fx 为准重新同步一次，避免重启后回到默认。
+  if (typeof fx === 'object' && fx && typeof fx.lyricPlatform === 'string') {
+    lyricPlatformPreference = normalizeLyricPlatform(fx.lyricPlatform);
+  }
   var mode = normalizeLyricPlatform(typeof lyricPlatformPreference === 'string' ? lyricPlatformPreference : 'auto');
   document.querySelectorAll('#lyric-platform-seg button').forEach(function (btn) {
     btn.classList.toggle('active', btn.dataset.lyricPlatform === mode);
@@ -1058,7 +1062,10 @@ function updateLyricPlatformControls() {
 }
 function setLyricPlatform(mode) {
   lyricPlatformPreference = normalizeLyricPlatform(mode);
+  // 二改：写入 fx 存档（重启后仍是上次选的平台），localStorage 保留兼容
+  if (typeof fx === 'object' && fx) fx.lyricPlatform = lyricPlatformPreference;
   saveLyricPlatformPreference(lyricPlatformPreference);
+  saveLyricLayout({ user: true, reason: 'lyricPlatform' });
   if (typeof lyricPlatformMatchCache === 'object' && lyricPlatformMatchCache) lyricPlatformMatchCache = Object.create(null);
   updateLyricPlatformControls();
   if (typeof showToast === 'function') {

@@ -3852,7 +3852,17 @@ function createDesktopLyricsWindow(payload = {}) {
   const yChanged = hasY && Number.isFinite(Number(previousY)) && Math.abs(nextY - clampNumber(previousY, 0.08, 0.92, 0.76)) > 0.001;
   const opacityChanged = Object.prototype.hasOwnProperty.call(payload || {}, 'opacity')
     && Math.abs(clampNumber(desktopLyricsState.opacity, 0.28, 1, 0.92) - clampNumber(previousOpacity, 0.28, 1, 0.92)) > 0.001;
-  if (yChanged) desktopLyricsUserBounds = null;
+  // 二改：这里要区分两种情况——
+  // 窗口已存在 = 用户在设置面板改了高度滑杆，丢弃手动拖动的位置；
+  // 窗口还没创建 = 本次是启动恢复（前端会把存档的 y 推过来），此时必须保留磁盘里的位置，
+  // 否则每次启动都会被 yChanged 推回默认位置（此前重启回到默认位置的根因）。
+  if (yChanged) {
+    if (desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) {
+      desktopLyricsUserBounds = null;
+    } else if (!desktopLyricsUserBounds) {
+      desktopLyricsUserBounds = readDesktopLyricsBoundsFile();
+    }
+  }
   if (desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) {
     if (yChanged) {
       positionDesktopLyricsWindow(desktopLyricsState, { force: yChanged });
@@ -3893,7 +3903,10 @@ function createDesktopLyricsWindow(payload = {}) {
   }
   startDesktopLyricsMousePoller();
   applyDesktopLyricsMouseBehavior();
-  positionDesktopLyricsWindow(desktopLyricsState, { force: yChanged || !desktopLyricsUserBounds });
+  // 二改：只有「没有磁盘位置记录」时才强制按 y 定位。
+  // 有记录时必须沿用上次拖动保存的位置——启动时前端会把存档的 y 推过来，
+  // yChanged 因此恒为 true，若继续拿它当条件，每次启动都会被拉回默认位置。
+  positionDesktopLyricsWindow(desktopLyricsState, { force: !desktopLyricsUserBounds });
   desktopLyricsWindow.once('ready-to-show', () => {
     if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return;
     desktopLyricsWindow.showInactive();
@@ -6133,6 +6146,9 @@ if (!gotSingleInstanceLock) {
     if (appQuitCleanupComplete) return;
     event.preventDefault();
     if (appQuitCleanupPromise) return;
+    // 二改：退出前立即把桌面歌词窗口位置落盘。
+    // 拖动后的写盘有 240ms 节流，托盘退出可能等不到，这里补一次同步写入。
+    if (desktopLyricsUserBounds) writeDesktopLyricsBoundsFile(desktopLyricsUserBounds);
     clearWallpaperEngineCaptureGrant();
     wallpaperEngineLibrary.dispose();
     stopMemoryAutoTimer();

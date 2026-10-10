@@ -3662,15 +3662,17 @@ function mapQQFeedPlaylist(item) {
   };
 }
 
-async function handleQQRecommendPlaylists(limit) {
+async function handleQQRecommendPlaylists(limit, page) {
   const size = Math.max(4, Math.min(20, Number(limit) || 6));
+  // 二改：支持翻页，刷新时能从第 2、3 页取到不同的歌单（原先固定 From=0，刷新不变）
+  const offset = Math.max(0, Math.floor(Number(page) || 0)) * size;
   const moduleName = 'music.playlist.PlaylistSquare';
   const json = await qqMusicRequest({
     comm: { ct: 24, cv: 0, uin: qqCookieUin() || '0' },
     [moduleName]: {
       method: 'GetRecommendFeed',
       module: moduleName,
-      param: { From: 0, Size: size },
+      param: { From: offset, Size: size },
     },
   }, { cookie: true });
   const node = json && json[moduleName];
@@ -5205,7 +5207,8 @@ const server = http.createServer(async (req, res) => {
   if (pn === '/api/qq/recommend/playlists') {
     try {
       const limit = Math.max(4, Math.min(20, parseInt(url.searchParams.get('limit') || '6', 10) || 6));
-      sendJSON(res, await handleQQRecommendPlaylists(limit));
+      const page = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10) || 0);
+      sendJSON(res, await handleQQRecommendPlaylists(limit, page));
     } catch (err) {
       console.error('[QQRecommendPlaylist]', err);
       sendJSON(res, { provider: 'qq', error: err.message, playlists: [] }, 500);

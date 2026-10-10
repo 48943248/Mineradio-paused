@@ -32,6 +32,8 @@ var fxDefaults = {
   lyricTranslationMode: 'multi',
   // 二改：歌词音译（罗马音/拼音），默认关闭，档位与译文一致。
   lyricTransliterationMode: 'off',
+  // 二改：歌词接入平台（auto=跟随音源），放进 fx 存档以便重启保留
+  lyricPlatform: 'auto',
   lyricMotionStyle: 'float',
   lyricCustomLineCount: 10,
   lyricGlitchCameraBind: true,

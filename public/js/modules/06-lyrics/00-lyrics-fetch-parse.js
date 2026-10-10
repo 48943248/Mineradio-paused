@@ -56,7 +56,14 @@ function normalizeLyricPlatform(value) {
   var raw = String(value == null ? '' : value).trim().toLowerCase();
   return LYRIC_PLATFORM_KEYS.indexOf(raw) >= 0 ? raw : 'auto';
 }
+// 二改：优先读 fx 存档（随视觉存档一起落到主进程 JSON，托盘退出重进不会丢），
+// localStorage 仅作为旧版本数据的兜底。
 function readLyricPlatformPreference() {
+  try {
+    if (typeof fx === 'object' && fx && typeof fx.lyricPlatform === 'string') {
+      return normalizeLyricPlatform(fx.lyricPlatform);
+    }
+  } catch (e) { }
   try { return normalizeLyricPlatform(localStorage.getItem(LYRIC_PLATFORM_STORE_KEY) || 'auto'); } catch (e) { return 'auto'; }
 }
 function saveLyricPlatformPreference(value) {

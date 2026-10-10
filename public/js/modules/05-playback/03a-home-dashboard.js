@@ -32,7 +32,7 @@ var homePlatformRecommendationState = {
     qq: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
   },
   // 二改：QQ 平台推荐按网易云同款结构展示（推荐歌单 + 每日推荐 30 首）
-  qqFeed: { loading: false, loaded: false, songs: [], playlists: [], toplistName: '', error: '' },
+  qqFeed: { loading: false, loaded: false, songs: [], playlists: [], toplistName: '', error: '', playlistPage: 0 },
 };
 
 var HOME_DASHBOARD_REVIEW_DEFAULTS = [
@@ -1180,13 +1180,15 @@ async function loadHomePlatformQQRecommendations(force) {
   var state = homePlatformRecommendationState.qqFeed;
   if (!state || state.loading) return;
   if (state.loaded && !force && !homePlatformRecommendationsAreStale(state.loaded, state.loadedAt)) return;
+  // 二改：每次强制刷新（刷新歌单按钮/过期）翻下一页，保证换一批歌单
+  if (force) state.playlistPage = (Number(state.playlistPage) || 0) + 1;
   state.loading = true;
   state.error = '';
   renderHomePlatformRecommendations();
   try {
     var results = await Promise.all([
       apiJson('/api/qq/recommendations?limit=30&t=' + Date.now(), { timeoutMs: 22000 }),
-      apiJson('/api/qq/recommend/playlists?limit=6&t=' + Date.now(), { timeoutMs: 18000 }).catch(function () { return null; }),
+      apiJson('/api/qq/recommend/playlists?limit=6&page=' + (Number(state.playlistPage) || 0) + '&t=' + Date.now(), { timeoutMs: 18000 }).catch(function () { return null; }),
     ]);
     var feed = results[0] || {};
     var rawSongs = feed.songs;
