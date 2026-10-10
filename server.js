@@ -3659,6 +3659,8 @@ function mapQQFeedPlaylist(item) {
     trackCount: Number(basic.song_cnt || basic.songCount || 0) || 0,
     playCount: Number(basic.play_cnt || basic.playCount || 0) || 0,
     creator: String((basic.creator && basic.creator.nick) || basic.creator_name || ''),
+    // 二改：显式标注来源平台，避免下游按歌曲逻辑取值时回退成「网易云音乐」
+    provider: 'qq',
   };
 }
 

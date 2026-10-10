@@ -61,6 +61,10 @@ function testQQRecommendCardsAreClickable() {
   assert.ok(dashboardText.indexOf("else if (kind === 'qq-playlist') playQQRecommendPlaylist(index);") >= 0,
     '歌单卡片要有点击分派');
   assert.ok(dashboardText.indexOf("'/api/qq/playlist/tracks?id='") >= 0, '点击歌单要拉取曲目');
+  // 回归：歌单卡片曾走歌曲副标题逻辑（songSourceLabel 会回退成「网易云音乐」），
+  // 导致 QQ 音乐推荐歌单的卡片显示成网易云音乐。
+  assert.ok(dashboardText.indexOf('if (/-playlist$/.test(kind))') >= 0, '歌单卡片要有专属副标题分支');
+  assert.ok(serverText.indexOf("provider: 'qq'") >= 0, 'QQ 推荐歌单要标注来源平台');
 }
 
 function testRecommendationsSyncPerPlatform() {

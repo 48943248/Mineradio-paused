@@ -903,8 +903,14 @@ function homePlatformRecommendationCard(kind, index, item, label) {
   item = item || {};
   var title = item.name || item.title || '未命名内容';
   var sub = '';
-  if (kind === 'netease-playlist') sub = (item.trackCount ? item.trackCount + ' 首' : '推荐歌单') + (item.playCount ? ' · ' + compactHomeCount(item.playCount) + ' 播放' : '');
-  else sub = homeDashboardSubtitle(item) || label;
+  // 二改：歌单卡片必须用「歌单专属」副标题。
+  // 原先歌单也走 homeDashboardSubtitle()，而歌单对象没有 provider 字段，
+  // songSourceLabel() 会回退成默认的「网易云音乐」——这就是 QQ 歌单显示成网易云的原因。
+  if (/-playlist$/.test(kind)) {
+    sub = (item.trackCount ? item.trackCount + ' 首' : '推荐歌单')
+      + (item.playCount ? ' · ' + compactHomeCount(item.playCount) + ' 播放' : '')
+      + (item.creator ? ' · ' + item.creator : '');
+  } else sub = homeDashboardSubtitle(item) || label;
   var cover = item.cover || item.picUrl || homeDashboardSongCover(item, 180) || '';
   var coverStyle = cover ? ' style="background-image:url(&quot;' + escHtml(cssImageUrl(cover)) + '&quot;)"' : '';
   return '<button class="home-platform-recommend-card" type="button" data-home-recommend-kind="' + kind + '" data-home-recommend-index="' + index + '">' +
