@@ -1,8 +1,12 @@
 # Mineradio
 
-> **本仓库为个人二改版（二创）**
+> **本仓库为个人二改版（非官方 fork）**
+>
+> 本仓库是 [XxHuberrr/Mineradio](https://github.com/XxHuberrr/Mineradio) `v2.2.0` 的**修改版本**，由个人基于上游源码二改，与上游作者及 Mineradio 官方**没有隶属或背书关系**。上游项目已长期停更。
 >
 > 在上游 2.2.0 基础上新增 **一键切换播放源**：播放器歌曲标题旁的「音源」按钮点一次，即可把播放源切到 QQ 音乐（或酷狗 / 网易云 / 汽水 / Spotify），之后每一首都会自动匹配并使用该音源的同名同歌手版本，**不需要再逐首手动切换**；选择保存在本机，重启后仍然生效。详细说明见 [一键切换播放源](./docs/PLAYBACK_SOURCE_PREFERENCE.md)。
+>
+> 授权与修改声明：本二改版继续以 **GPL-3.0-only** 发布，版权与"已修改"声明见下方 [上游关系、版权与许可](#上游关系版权与许可)。
 
 > **上游项目状态：长期停更**
 >
@@ -14,7 +18,21 @@
 
 Mineradio 是一款 Windows 桌面沉浸式音乐播放器，把搜索播放、歌词舞台、粒子视觉、3D 歌单架和完整桌面模式组合成一个更接近现场感的私人音乐空间。
 
+## 立即下载 Windows 安装包
 
+> 本次下载入口已更换，请使用下面的新网盘链接，并更新旧收藏。通过公告中的网盘入口下载，可以继续使用现有版本；项目目前处于长期停更状态。
+
+| 下载入口 | 推荐人群 | 链接 |
+| --- | --- | --- |
+| 夸克盘 | 夸克用户 | [下载 Mineradio 2.2.0](https://pan.quark.cn/s/4b124d3e81d3) |
+| 百度云 | 百度网盘用户（提取码 `SJHP`） | [下载 Mineradio 2.2.0](https://pan.baidu.com/s/17CwpHUza67w_Grgc3s5nOw?pwd=SJHP) |
+| GitHub Release | 版本说明与源码 | [查看 Mineradio 2.2.0](https://github.com/XxHuberrr/Mineradio/releases/tag/v2.2.0) |
+
+本页、发布公告和软件更新入口使用相同的两条新链接。旧分享地址不再作为本次版本的下载入口。
+
+安装时只需要下载并运行 `Mineradio-2.2.0-Setup.exe`。不要把 `.blockmap`、`latest.yml` 或 `win-unpacked` 当成正式安装包。
+
+2.1.0 用户如果未看到更新提醒，请从托盘彻底退出后重新打开软件，切回普通窗口，等待约 30 秒后查看右上角更新箭头。旧版不会自动弹出公告；也可以直接使用上面的新网盘链接下载安装包。
 
 ## 下载或安装被拦截怎么办
 
@@ -24,9 +42,23 @@ Mineradio 是一款 Windows 桌面沉浸式音乐播放器，把搜索播放、�
 2. Windows SmartScreen 弹出蓝色拦截窗口时，点 `更多信息`，再点 `仍要运行`。
 3. 如果杀毒软件明确显示木马、高危或已经隔离，不要强行运行；删除该文件后重新从上面的网盘入口下载，仍然异常请带截图反馈给作者。
 
+## 作者支持
 
+如果 Mineradio 陪你多听了一首歌，也欢迎请作者一杯咖啡。
 
+[查看完整支持页](./docs/SUPPORT.md)
 
+![Mineradio 作者支持渠道](./docs/assets/support/mineradio-author-support-poster.png)
+
+Mineradio 2.2 是历史稳定版本，修复了音乐接口的登录与播放问题，改善歌单加载和网络异常恢复，并加入更多手势操作与粒子预设。
+
+## 当前版本
+
+当前版本：`2.2.0`
+
+状态：Mineradio 2.2.0 历史正式版；项目目前长期停更。
+
+> 安全提示：`v1.0.10` 及更早旧安装包不再建议继续安装或传播。请使用本次公告提供的 `Mineradio-2.2.0-Setup.exe`。
 
 ## 核心特性
 
@@ -45,6 +77,13 @@ Mineradio 是一款 Windows 桌面沉浸式音乐播放器，把搜索播放、�
 - GitHub Releases 更新检测与下载入口
 - 首次启动内置「默认测试」视觉用户存档，软件内默认视觉参数与该存档一致
 
+## 使用说明
+
+Windows 用户可以从本次发布公告列出的新网盘入口下载安装包。
+
+正式分发以 `Mineradio-2.2.0-Setup.exe` 为准，不建议直接使用 `win-unpacked` 目录。安装包会创建桌面快捷方式。
+
+已经安装过旧版本的用户可直接运行 `Mineradio-2.2.0-Setup.exe` 完成更新。软件内更新入口只会打开浏览器下载页，不会在客户端内下载或应用补丁。
 
 ## 开发运行
 
@@ -56,6 +95,11 @@ npm run build:win
 
 桌面版入口由 Electron 主进程加载本地服务。`npm run build:win` 会生成 Windows NSIS 安装包，产物位于 `dist/`。
 
+## 更新机制
+
+Mineradio 会请求 GitHub Releases latest 检测新版本。远端版本高于本地版本时，应用内更新入口会展示 Release 内容，并通过系统浏览器打开可选网盘线路；即使 Release 附带完整安装包，`2.0.3+` 客户端也不会读取、下载、缓存或应用该附件与补丁。
+
+本地验证更新链路时，可以通过 `MINERADIO_UPDATE_MANIFEST` 指向一个本地 manifest JSON 或 HTTP 地址来模拟线上 Release。
 
 ## 第三方音乐平台说明
 
@@ -75,7 +119,47 @@ Mineradio 由 XxHuberrr 主要设计与打造。emily 作为早期视觉底层�
 
 同时感谢小天才e宝、应春日、锋将军、軌跡、林中、骊、风痕、花椰菜🥦在早期体验、测试反馈和发布准备中的帮助。
 
-## 版权与授权
+## 上游关系、版权与许可
+
+### 上游关系
+
+本仓库是 [XxHuberrr/Mineradio](https://github.com/XxHuberrr/Mineradio) 的**非官方修改版本（fork）**，以上游 `v2.2.0` 的公开源码为基线。除下方列出的改动外，其余代码、界面与文档均来自上游。
+
+| 项目 | 上游 | 本仓库（二改版） |
+| --- | --- | --- |
+| 仓库 | [XxHuberrr/Mineradio](https://github.com/XxHuberrr/Mineradio) | [48943248/Mineradio-paused](https://github.com/48943248/Mineradio-paused) |
+| 基线版本 | `v2.2.0` | `v2.2.0` + 二改补丁 |
+| 授权 | GPL-3.0-only | GPL-3.0-only（沿用同一许可证） |
+| 维护状态 | 长期停更 | 个人自用二改，非官方、无背书 |
+
+### 版权
+
+- **原版 Mineradio**（含代码、界面视觉设计、原始视觉表达、MR Logo 与 Mineradio 名称）：Copyright (C) 2026 XxHuberrr，依 GPL-3.0 授权。
+- **本二改版新增与修改的部分**：Copyright (C) 2026 本仓库维护者（GitHub `48943248`），在上游原有许可范围内完成，并同样以 GPL-3.0 授权。
+- 二改者**不主张**对上游原有内容、名称或标识的任何权利；`Mineradio` 名称与 MR Logo 等标识**不随 GPL 授权转移**，本二改版不以官方名义分发，也不代表上游作者立场。
+- 第三方依赖与第三方音乐服务分别遵循其各自的授权与服务条款。
+
+### 许可与"修改"声明
+
+本项目（含二改部分）继续以 **GNU General Public License v3.0（GPL-3.0-only）** 发布，完整条款见 [LICENSE](./LICENSE)。
+
+依据 **GPL-3.0 第 5 条**（修改版本必须以显著方式声明"已修改"及修改日期，并整体按 GPL 授权），特此声明：
+
+1. **已修改**：本仓库是上游 `v2.2.0` 的修改版本，相对上游**有改动**。改动明细见 [CHANGELOG.md](./CHANGELOG.md)，完整差异见仓库根目录补丁 `mineradio-preferred-playback-source.patch`。
+2. **修改日期**：二改工作于 **2026 年 10 月**进行。
+3. **修改范围**（仅涉及下列文件，其余上游文件未改动）：
+   - **新增**：`public/js/modules/05-playback/12a-preferred-playback-source.js`、`docs/PLAYBACK_SOURCE_PREFERENCE.md`、`tests/preferred-playback-source.test.js`、`tests/qq-member-quality-tier.test.js`、`tests/playlist-collect-sync.test.js`、`tests/lyric-transliteration.test.js`
+   - **修改**：`server.js`、`kugou-api.js`、`public/index.html`、`public/css/index.css`、`public/js/index-loader.js`、`public/default-user-fx-archive.json`、`public/desktop-lyrics.html`、`desktop/main.js`、`desktop/preload.js`、`desktop/overlay-preload.js`、`CHANGELOG.md`、`README.md`，以及 `public/js/modules/` 下的状态、播放、歌词、视觉与面板相关模块（`00-state`、`02-visual`、`05-playback`、`06-lyrics`、`07-fx`、`10-shell`）
+4. **再分发条件**：任何再分发（包括对二改版再次修改后分发）都必须：
+   - 保留本文件与 [LICENSE](./LICENSE) 中的版权声明与许可声明，不得移除或改写；
+   - 显著标注"已修改"以及修改日期；
+   - 整体继续以 GPL-3.0（或 GPL 兼容方式）授权，**不得附加额外限制**；
+   - 向接收者提供完整对应源码（本仓库源码 + 补丁即满足该要求）。
+5. **二进制分发**：Release 中的 `Mineradio-2.2.0-mr.*-Setup.exe` 是上述修改版本的安装包；其完整对应源码就是本仓库源码，未做任何额外封闭。安装包**未做代码签名**。
+6. **无担保**：与 GPL-3.0 第 15、16 条一致，本二改版按"现状"提供，**不提供任何明示或默示担保**（包括可售性与特定用途适用性）；因使用本软件产生的任何后果由使用者自行承担。
+7. **合规提示**：GPL-3.0 允许商业性再分发，但再分发者必须自行遵守上述全部条款；`Mineradio` 名称、MR Logo 等标识的使用需另行获得权利人许可。
+
+## 版权与授权（原版声明）
 
 Copyright (C) 2026 XxHuberrr.
 
