@@ -111,7 +111,32 @@ const {
   handleQishuiSongUrl,
 } = require('./qishui-api');
 const qishuiQrLogin = require('./qishui-qr-login');
-const { clearSpotifyToken } = require('./spotify-api');
+// 二改：恢复 Spotify 平台。上游移除该平台时把这些解构一并删掉了，
+// 结果所有 /api/spotify/* 端点都会抛 "handleSpotifyXxx is not defined"。
+const {
+  clearSpotifyToken,
+  getSpotifyConfig,
+  saveSpotifyConfig,
+  getSpotifyOAuthConfig,
+  buildSpotifyOAuthAuthorizeUrl,
+  exchangeSpotifyOAuthCode,
+  saveSpotifyOAuthToken,
+  handleSpotifyStatus,
+  handleSpotifySetupDiagnostics,
+  handleSpotifySearch,
+  handleSpotifyRecommendations,
+  handleSpotifyUserPlaylists,
+  handleSpotifyPlaylistTracks,
+  handleSpotifyAlbumDetail,
+  handleSpotifyLibraryCheck,
+  handleSpotifyLibrarySet,
+  handleSpotifyPlaylistAddSong,
+  handleSpotifyCreatePlaylist,
+  handleSpotifySongUrl,
+  handleSpotifyLyric,
+  SPOTIFY_LIKED_PLAYLIST_ID,
+  SPOTIFY_SEARCH_LIMIT_MAX,
+} = require('./spotify-api');
 const {
   appendCuefieldFeedback,
   readCuefieldFeedbackStats,
@@ -4800,15 +4825,106 @@ function loginEasterEggGateUnlocked() {
   }
 }
 
+// 二改：恢复 Spotify 登录。上游移除该平台时连 OAuth 闭环一起删了，
+// 这里用官方 PKCE 流程补齐：本机生成 code_verifier/challenge，等回调拿 code 再换 token。
+const SPOTIFY_OAUTH_PENDING = new Map();
+let spotifyCallbackServer = null;
+function spotifyPkcePair() {
+  const crypto = require('crypto');
+  const verifier = crypto.randomBytes(48).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+  return { verifier: verifier, challenge: challenge };
+}
+function spotifyRandomState() {
+  return require('crypto').randomBytes(12).toString('hex');
+}
+function spotifyOAuthStart() {
+  const oauth = getSpotifyOAuthConfig();
+  if (!oauth.configured) {
+    return { ok: false, error: 'SPOTIFY_OAUTH_NOT_CONFIGURED', missing: oauth.missing || [], message: '请先保存 Spotify Client ID。' };
+  }
+  const pair = spotifyPkcePair();
+  const state = spotifyRandomState();
+  const now = Date.now();
+  SPOTIFY_OAUTH_PENDING.forEach((entry, key) => {
+    if (!entry || now - entry.createdAt > 15 * 60 * 1000) SPOTIFY_OAUTH_PENDING.delete(key);
+  });
+  SPOTIFY_OAUTH_PENDING.set(state, { verifier: pair.verifier, createdAt: now });
+  ensureSpotifyCallbackServer(oauth.redirectUri);
+  return {
+    ok: true,
+    url: buildSpotifyOAuthAuthorizeUrl({ codeChallenge: pair.challenge, state: state, redirectUri: oauth.redirectUri }),
+    state: state,
+    redirectUri: oauth.redirectUri,
+  };
+}
+async function spotifyOAuthComplete(code, state) {
+  const key = String(state || '');
+  const pending = SPOTIFY_OAUTH_PENDING.get(key);
+  if (!pending) {
+    const err = new Error('SPOTIFY_OAUTH_STATE_UNKNOWN');
+    err.code = 'SPOTIFY_OAUTH_STATE_UNKNOWN';
+    throw err;
+  }
+  SPOTIFY_OAUTH_PENDING.delete(key);
+  if (!code) throw new Error('SPOTIFY_OAUTH_CODE_MISSING');
+  const status = await exchangeSpotifyOAuthCode({ code: code, codeVerifier: pending.verifier });
+  return { ok: true, login: status };
+}
+// Spotify 的 redirect_uri 指向本机固定端口（默认 127.0.0.1:43879/callback），
+// 与主服务端口不同，所以单独起一个极小的回调服务器接收授权码。
+function ensureSpotifyCallbackServer(redirectUri) {
+  if (spotifyCallbackServer) return spotifyCallbackServer;
+  let target = null;
+  try { target = new URL(String(redirectUri || '')); } catch (err) { return null; }
+  if (target.hostname !== '127.0.0.1' && target.hostname !== 'localhost') return null;
+  const port = Number(target.port) || 80;
+  if (port === PORT) return null;
+  spotifyCallbackServer = http.createServer(async (req, res) => {
+    const callbackUrl = new URL(req.url, 'http://127.0.0.1');
+    if (callbackUrl.pathname !== target.pathname) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('not found');
+      return;
+    }
+    const code = callbackUrl.searchParams.get('code') || '';
+    const state = callbackUrl.searchParams.get('state') || '';
+    const denied = callbackUrl.searchParams.get('error') || '';
+    try {
+      if (denied) throw new Error('SPOTIFY_OAUTH_DENIED:' + denied);
+      await spotifyOAuthComplete(code, state);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end('<!doctype html><meta charset="utf-8"><h2>Spotify 授权成功</h2><p>可以回到 Mineradio 继续使用，本页可关闭。</p>');
+    } catch (err) {
+      console.warn('[SpotifyOAuth] callback failed:', err.message);
+      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end('<!doctype html><meta charset="utf-8"><h2>Spotify 授权失败</h2><pre>' + String(err.message) + '</pre>');
+    }
+  });
+  spotifyCallbackServer.on('error', (err) => {
+    console.warn('[SpotifyOAuth] callback server:', err.message);
+    spotifyCallbackServer = null;
+  });
+  try {
+    spotifyCallbackServer.listen(port, '127.0.0.1', () => {
+      console.log('[SpotifyOAuth] 回调监听 http://127.0.0.1:' + port + target.pathname);
+    });
+  } catch (err) {
+    console.warn('[SpotifyOAuth] listen failed:', err.message);
+    spotifyCallbackServer = null;
+    return null;
+  }
+  return spotifyCallbackServer;
+}
+
 const server = http.createServer(async (req, res) => {
   refreshConfiguredCookieStores(false);
   const url = new URL(req.url, 'http://localhost:' + PORT);
   const pn = url.pathname;
 
-  if (pn === '/api/spotify' || pn.indexOf('/api/spotify/') === 0) {
-    sendJSON(res, { ok: false, error: 'PROVIDER_REMOVED', message: '该平台接口已从 Mineradio 移除。' }, 404);
-    return;
-  }
+  // 二改：上游在此处整体拦截并移除了 Spotify 接口。
+  // 本二改版按要求恢复该平台：登录、歌单、搜索、推荐、播放与歌词等端点全部重新可用。
+  // 相关实现仍在 spotify-api.js 中，这里不再拦截。
 
   if (LOGIN_EASTER_EGG_PROTECTED_ROUTES.has(pn) && !loginEasterEggGateUnlocked()) {
     sendJSON(res, {
@@ -5149,6 +5265,34 @@ const server = http.createServer(async (req, res) => {
       console.error('[KugouRecommendations]', err);
       sendJSON(res, { provider: 'kugou', error: err.message, songs: [] }, 500);
     }
+    return;
+  }
+
+  if (pn === '/api/spotify/oauth/start') {
+    try {
+      sendJSON(res, spotifyOAuthStart());
+    } catch (err) {
+      console.error('[SpotifyOAuth]', err);
+      sendJSON(res, { ok: false, error: err.code || err.message, message: err.message }, 500);
+    }
+    return;
+  }
+
+  if (pn === '/api/spotify/oauth/callback') {
+    try {
+      sendJSON(res, await spotifyOAuthComplete(
+        url.searchParams.get('code') || '',
+        url.searchParams.get('state') || ''
+      ));
+    } catch (err) {
+      console.error('[SpotifyOAuth]', err);
+      sendJSON(res, { ok: false, error: err.code || err.message, message: err.message }, 400);
+    }
+    return;
+  }
+
+  if (pn === '/api/spotify/oauth/status') {
+    sendJSON(res, { ok: true, pending: SPOTIFY_OAUTH_PENDING.size });
     return;
   }
 

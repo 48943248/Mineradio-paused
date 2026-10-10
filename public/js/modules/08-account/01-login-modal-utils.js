@@ -432,3 +432,36 @@ function bindTopAccountPillSorting() {
   btn.addEventListener('pointerup', finish);
   btn.addEventListener('pointercancel', finish);
 }
+
+// 二改：恢复 Spotify 登录。走服务端 PKCE 闭环：打开官方授权页，本机回调自动换取 token。
+async function startSpotifyLogin() {
+  try {
+    var res = await apiJson('/api/spotify/oauth/start', { timeoutMs: 15000 });
+    if (!res || !res.ok || !res.url) {
+      if (typeof showToast === 'function') showToast((res && (res.message || res.error)) || 'Spotify 授权启动失败');
+      return;
+    }
+    if (typeof showToast === 'function') showToast('已打开 Spotify 官方授权页，完成授权后会自动回到本机');
+    if (window.desktopWindow && typeof window.desktopWindow.openExternal === 'function') {
+      window.desktopWindow.openExternal(res.url);
+    } else {
+      window.open(res.url, '_blank');
+    }
+    var tries = 0;
+    var timer = setInterval(async function () {
+      tries += 1;
+      try {
+        var status = await apiJson('/api/spotify/status', { timeoutMs: 15000 });
+        if (status && status.loggedIn) {
+          clearInterval(timer);
+          if (typeof showToast === 'function') showToast('Spotify 登录成功');
+          if (typeof refreshSpotifyLoginStatus === 'function') refreshSpotifyLoginStatus();
+          if (typeof updateAccountPanel === 'function') updateAccountPanel();
+        }
+      } catch (err) { /* 继续轮询 */ }
+      if (tries >= 60) clearInterval(timer);
+    }, 3000);
+  } catch (err) {
+    if (typeof showToast === 'function') showToast('Spotify 授权启动失败：' + ((err && err.message) || err));
+  }
+}

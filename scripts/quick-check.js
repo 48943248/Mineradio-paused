@@ -1945,19 +1945,20 @@ function checkSpotifyRemovalGuard() {
   if (/search-mode-spotify|login-provider-spotify|user-provider-spotify|account-add-spotify|spotify-setup-wizard/.test(indexText)) {
     fail('removed provider must not expose search, login, account, or setup UI');
   }
-  if (/MUSIC_SEARCH_PROVIDER_ORDER\s*=\s*\[[^\]]*spotify/.test(searchText) || /ACCOUNT_PROVIDER_KEYS\s*=\s*\[[^\]]*spotify/.test(accountText)) {
-    fail('removed provider must not participate in search or account capsule ordering');
+  // 二改：本仓库恢复了 Spotify 平台，这里改为校验恢复后的接入面。
+  if (!/MUSIC_SEARCH_PROVIDER_ORDER\s*=\s*\[[^\]]*spotify/.test(searchText)) {
+    fail('restored provider must participate in search provider ordering');
   }
-  if (/refreshSpotifyLoginStatus\(\)|startSpotifyLoginStatusAutoRefresh\(\)/.test(startupText)) {
-    fail('startup must not request removed provider status');
+  if (/PROVIDER_REMOVED/.test(serverText) && /pn\.indexOf\('\/api\/spotify\/'\) === 0/.test(serverText)) {
+    fail('restored provider HTTP routes must not be blocked by a removal guard');
   }
-  if (!/PROVIDER_REMOVED/.test(serverText) || !/pn\.indexOf\('\/api\/spotify\/'\) === 0/.test(serverText)) {
-    fail('removed provider HTTP routes must terminate with an explicit 404 guard');
+  if (!/handleSpotifyStatus/.test(serverText) || !/\/api\/spotify\/oauth\/start/.test(serverText)) {
+    fail('restored provider must expose status and OAuth endpoints');
   }
-  if (/spotify-music-(?:open-login|verify-setup|clear-login)/.test(mainText + '\n' + preloadText)) {
-    fail('desktop bridge must not expose removed provider login IPC');
+  if (!/\/api\/spotify\/user\/playlists/.test(serverText)) {
+    fail('restored provider must expose user playlists');
   }
-  console.log('[OK] Removed provider has no searchable, login, account-capsule, startup, HTTP, or desktop IPC surface.');
+  console.log('[OK] Restored provider exposes search ordering, HTTP routes, OAuth login and playlists.');
 }
 
 function checkPlaybackControlBadgesGuard() {
