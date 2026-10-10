@@ -1254,11 +1254,23 @@ async function loadHomePlatformRecommendations(source, force) {
   renderHomePlatformRecommendations();
 }
 
+// 二改：QQ 的推荐歌曲存在 qqFeed.songs（不是 feeds.qq.songs），取错数组会导致点击无反应。
+function homePlatformFeedSongsFor(source) {
+  if (source === 'qq') {
+    var qqFeed = homePlatformRecommendationState.qqFeed;
+    return (qqFeed && qqFeed.songs) || [];
+  }
+  var feedState = homePlatformRecommendationState.feeds[source];
+  return (feedState && feedState.songs) || [];
+}
+
 function playHomePlatformFeedSong(source, index) {
   var config = homePlatformRecommendationFeedConfig(source);
-  var feedState = homePlatformRecommendationState.feeds[source];
-  var songs = feedState && feedState.songs || [];
-  if (!config || !songs.length) return;
+  var songs = homePlatformFeedSongsFor(source);
+  if (!config || !songs.length) {
+    if (typeof showToast === 'function') showToast('当前平台推荐暂无可播放内容');
+    return;
+  }
   playQueue = songs.map(cloneSong);
   currentIdx = Math.max(0, Math.min(playQueue.length - 1, Number(index) || 0));
   homeForcedOpen = false;
@@ -1271,6 +1283,41 @@ function playHomePlatformFeedSong(source, index) {
     manual: true,
     context: { type: 'home-platform-recommendation', playlistName: config.playlistName },
   })).catch(function (error) { console.warn('[HomePlatformFeedPlay:' + source + ']', error); });
+}
+
+// 二改：点击 QQ「推荐歌单」→ 拉取该歌单曲目并开始播放。
+async function playQQRecommendPlaylist(index) {
+  var state = homePlatformRecommendationState.qqFeed;
+  var playlist = state && state.playlists ? state.playlists[index] : null;
+  if (!playlist || !playlist.id) return;
+  closeHomePlatformRecommendations();
+  if (typeof showToast === 'function') showToast('正在读取歌单：' + (playlist.name || ''));
+  try {
+    var data = await apiJson(
+      '/api/qq/playlist/tracks?id=' + encodeURIComponent(playlist.id) + '&limit=200&t=' + Date.now(),
+      { timeoutMs: 22000 }
+    );
+    var songs = (data && (data.songs || data.tracks || data.list)) || [];
+    if (!Array.isArray(songs) || !songs.length) {
+      if (typeof showToast === 'function') showToast('该歌单暂无可用曲目');
+      return;
+    }
+    playQueue = songs.map(cloneSong);
+    currentIdx = 0;
+    homeForcedOpen = false;
+    homeSuppressed = false;
+    if (typeof setHomeControlsLocked === 'function') setHomeControlsLocked(false);
+    if (typeof safeRenderQueuePanel === 'function') safeRenderQueuePanel('home-platform-qq-playlist', { scrollCurrent: true });
+    if (typeof safeShelfRebuild === 'function') safeShelfRebuild('home-platform-qq-playlist', true);
+    if (typeof forcePlaybackControlsInteractive === 'function') forcePlaybackControlsInteractive();
+    await playQueueAt(0, {
+      manual: true,
+      context: { type: 'home-platform-recommendation', playlistName: playlist.name || 'QQ 音乐推荐歌单' },
+    });
+  } catch (error) {
+    console.warn('[HomeQQPlaylistPlay]', error);
+    if (typeof showToast === 'function') showToast('歌单读取失败，请稍后再试');
+  }
 }
 
 function closeHomePlatformRecommendations() {
@@ -1309,6 +1356,7 @@ function bindHomePlatformRecommendationControls() {
     if (kind === 'netease-playlist' && typeof openHomePlaylist === 'function') openHomePlaylist(index);
     else if (kind === 'netease-song' && typeof playHomeSong === 'function') playHomeSong(index);
     else if (/^(qishui|kugou|spotify|qq)-song$/.test(kind)) playHomePlatformFeedSong(kind.replace(/-song$/, ''), index);
+    else if (kind === 'qq-playlist') playQQRecommendPlaylist(index);
   });
   if (list) list.addEventListener('scroll', scheduleHomePlatformDailyWindowRender, { passive: true });
   window.addEventListener('resize', scheduleHomePlatformDailyWindowRender, { passive: true });

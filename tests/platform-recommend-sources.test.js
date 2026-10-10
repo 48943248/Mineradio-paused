@@ -51,6 +51,16 @@ function testQQRecommendCardsAreClickable() {
   assert.ok(dashboardText.indexOf("'<section><h3>推荐歌单</h3>") >= 0, '要有「推荐歌单」分区');
   assert.ok(dashboardText.indexOf('每日推荐<span> · ') >= 0, '要有「每日推荐」分区');
   assert.ok(dashboardText.indexOf('.slice(0, 30)') >= 0, '歌曲条数上限 30');
+  // 回归：QQ 的歌曲存在 qqFeed.songs，播放函数原先只读 feeds.qq.songs（空数组）→ 点击毫无反应
+  assert.ok(dashboardText.indexOf('function homePlatformFeedSongsFor(source)') >= 0,
+    '要有按平台取歌曲的专用函数');
+  assert.ok(dashboardText.indexOf('var songs = homePlatformFeedSongsFor(source);') >= 0,
+    '播放函数必须用专用取值（否则 QQ 点歌无反应）');
+  // 推荐歌单要能点击播放
+  assert.ok(dashboardText.indexOf('async function playQQRecommendPlaylist(index)') >= 0);
+  assert.ok(dashboardText.indexOf("else if (kind === 'qq-playlist') playQQRecommendPlaylist(index);") >= 0,
+    '歌单卡片要有点击分派');
+  assert.ok(dashboardText.indexOf("'/api/qq/playlist/tracks?id='") >= 0, '点击歌单要拉取曲目');
 }
 
 function testRecommendationsSyncPerPlatform() {
