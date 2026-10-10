@@ -1,6 +1,16 @@
 function normalizeStageLyricText(text) {
   return String(text || '').replace(/\s+/g, ' ').trim();
 }
+// 音译文本与译文文本同构：折叠空白并过滤占位文本
+function normalizeLyricTransliterationText(text) {
+  text = normalizeStageLyricText(text);
+  if (!text || isNoLyricText(text)) return '';
+  return text;
+}
+// 译文行/音译行都属于主行下的附加行
+function isSecondaryStageLyricEntry(entry) {
+  return !!(entry && (entry.translationLine || entry.transliterationLine));
+}
 function normalizeStageLyricEntry(entry, fallbackRole) {
   if (typeof entry === 'string') entry = { text: entry };
   entry = entry || {};
@@ -16,6 +26,8 @@ function normalizeStageLyricEntry(entry, fallbackRole) {
   if (entry.lineOffset != null && isFinite(lineOffsetValue)) out.lineOffset = clampRange(lineOffsetValue, -0.58, 0.20);
   if (entry.translation) out.translation = normalizeLyricTranslationText(entry.translation);
   if (entry.translationLine) out.translationLine = true;
+  if (entry.transliteration) out.transliteration = normalizeLyricTransliterationText(entry.transliteration);
+  if (entry.transliterationLine) out.transliterationLine = true;
   if (entry.parentRole) out.parentRole = entry.parentRole;
   if (entry.parentIndex != null && isFinite(Number(entry.parentIndex))) out.parentIndex = Number(entry.parentIndex);
   if (entry.lineIndex != null && isFinite(Number(entry.lineIndex))) out.lineIndex = Number(entry.lineIndex);
@@ -107,6 +119,8 @@ function cloneStageLyricEntryForLayer(entry, overrides) {
     lineOffset: entry.lineOffset,
     translation: entry.translation,
     translationLine: entry.translationLine,
+    transliteration: entry.transliteration,
+    transliterationLine: entry.transliterationLine,
     parentRole: entry.parentRole,
     parentIndex: entry.parentIndex,
     lineIndex: entry.lineIndex,
@@ -148,17 +162,17 @@ function rowBaseStageLyricPayload(payload) {
   payload = normalizeStageLyricPayload(payload);
   if (!payload || !payload.entries || !payload.entries.length) return null;
   var active = payload.entries[payload.activeLine] || payload.entries[0];
-  if (active && active.translationLine) {
+  if (isSecondaryStageLyricEntry(active)) {
     for (var i = payload.activeLine - 1; i >= 0; i--) {
-      if (payload.entries[i] && !payload.entries[i].translationLine) {
+      if (payload.entries[i] && !isSecondaryStageLyricEntry(payload.entries[i])) {
         active = payload.entries[i];
         break;
       }
     }
   }
-  if (!active || active.translationLine) {
+  if (!active || isSecondaryStageLyricEntry(active)) {
     for (var j = 0; j < payload.entries.length; j++) {
-      if (payload.entries[j] && !payload.entries[j].translationLine) {
+      if (payload.entries[j] && !isSecondaryStageLyricEntry(payload.entries[j])) {
         active = payload.entries[j];
         break;
       }
@@ -175,6 +189,7 @@ function rowBaseStageLyricPayload(payload) {
       scale: 1,
       lineOffset: 0,
       translationLine: false,
+      transliterationLine: false,
       parentRole: '',
       parentIndex: undefined,
       virtualIndex: 0
@@ -194,7 +209,7 @@ function contextStageLyricPayload(payload) {
       continue;
     }
     hasContext = true;
-    if (entry.translationLine) {
+    if (isSecondaryStageLyricEntry(entry)) {
       entries.push(cloneStageLyricEntryForLayer(entry, {
         alpha: clampRange(entry.alpha == null ? lyricContextOpacityValue() * 0.58 : entry.alpha, 0, 0.72),
         scale: clampRange(entry.scale == null ? lyricTranslationScaleValue() * 0.88 : entry.scale, 0.42, 1.12),

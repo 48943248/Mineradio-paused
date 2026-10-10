@@ -1,6 +1,7 @@
 var STAGE_LYRIC_MAX_LINES = 1;
 var STAGE_LYRIC_DISPLAY_MODES = { single: 1, dual: 1, triple: 1, cinema: 1, custom: 1 };
 var STAGE_LYRIC_TRANSLATION_MODES = { off: 1, current: 1, dual: 1, multi: 1 };
+var STAGE_LYRIC_TRANSLITERATION_MODES = { off: 1, current: 1, dual: 1, multi: 1 };
 var STAGE_LYRIC_MOTION_STYLES = { glass: 1, smooth: 1, float: 1, quick: 1, shine: 1, glitch: 1 };
 
 function normalizeLyricDisplayMode(mode) {
@@ -10,6 +11,10 @@ function normalizeLyricDisplayMode(mode) {
 function normalizeLyricTranslationMode(mode) {
   mode = String(mode || 'off');
   return STAGE_LYRIC_TRANSLATION_MODES[mode] ? mode : 'off';
+}
+function normalizeLyricTransliterationMode(mode) {
+  mode = String(mode || 'off');
+  return STAGE_LYRIC_TRANSLITERATION_MODES[mode] ? mode : 'off';
 }
 function lyricCustomLineCountValue() {
   var raw = fx && fx.lyricCustomLineCount != null ? Number(fx.lyricCustomLineCount) : fxDefaults.lyricCustomLineCount;
@@ -55,17 +60,35 @@ function lyricTranslationVisualGapValue() {
 function lyricTranslationLayoutActive() {
   return normalizeLyricTranslationMode(fx && fx.lyricTranslationMode) !== 'off';
 }
-function lyricPrimarySlotStepValue() {
-  if (!lyricTranslationLayoutActive()) return 1;
-  return clampRange(lyricTranslationVisualGapValue() + 0.82 + lyricTranslationScaleValue() * 0.14, 1.78, 2.88);
+function lyricTransliterationLayoutActive() {
+  return normalizeLyricTransliterationMode(fx && fx.lyricTransliterationMode) !== 'off';
 }
-function lyricLineHasTranslationAt(index) {
-  if (!lyricTranslationLayoutActive()) return false;
+// 译文/音译都占用主行下的附加行槽位，布局一并计入
+function lyricSecondaryLineSlotCountValue() {
+  var count = 0;
+  if (lyricTranslationLayoutActive()) count += 1;
+  if (lyricTransliterationLayoutActive()) count += 1;
+  return count;
+}
+function lyricSecondaryLineLayoutActive() {
+  return lyricSecondaryLineSlotCountValue() > 0;
+}
+function lyricPrimarySlotStepValue() {
+  var slots = lyricSecondaryLineSlotCountValue();
+  if (!slots) return 1;
+  return clampRange(lyricTranslationVisualGapValue() * slots + 0.82 + lyricTranslationScaleValue() * 0.14, 1.78, 2.88 + (slots - 1) * 1.10);
+}
+function lyricLineHasSecondaryTextAt(index) {
+  if (!lyricSecondaryLineLayoutActive()) return false;
   var n = Math.max(0, Math.round(Number(index) || 0));
-  return !!lyricLineTranslationTextAt(n);
+  return !!lyricLineTranslationTextAt(n) || !!lyricLineTransliterationTextAt(n);
+}
+// 沿用原函数名，语义扩展为“译文行或音译行”
+function lyricLineHasTranslationAt(index) {
+  return lyricLineHasSecondaryTextAt(index);
 }
 function lyricLineSlotStepValue(index) {
-  if (!lyricTranslationLayoutActive()) return 1;
+  if (!lyricSecondaryLineLayoutActive()) return 1;
   var n = Math.round(Number(index) || 0);
   var needsTranslationSlot = lyricLineHasTranslationAt(n) || (n >= 0 && lyricLineHasTranslationAt(n + 1));
   return needsTranslationSlot ? lyricPrimarySlotStepValue() : clampRange(1.04 + (lyricContextSpreadValue() - 1) * 0.10, 0.96, 1.24);
@@ -75,20 +98,23 @@ function lyricPrimaryVirtualPrefixKey() {
   var first = lyricsLines && lyricsLines[0];
   var last = lyricsLines && lyricsLines.length ? lyricsLines[lyricsLines.length - 1] : null;
   return [
-    lyricTranslationLayoutActive() ? 1 : 0,
+    lyricSecondaryLineLayoutActive() ? 1 : 0,
+    lyricSecondaryLineSlotCountValue(),
     Math.round(lyricTranslationGapValue() * 1000),
     Math.round(lyricTranslationScaleValue() * 1000),
     Math.round(lyricContextSpreadValue() * 1000),
     lyricsLines ? lyricsLines.length : 0,
     lyricsTranslationLines ? lyricsTranslationLines.length : 0,
     first ? normalizeLyricTranslationText(first.translation).slice(0, 12) : '',
-    last ? normalizeLyricTranslationText(last.translation).slice(0, 12) : ''
+    last ? normalizeLyricTranslationText(last.translation).slice(0, 12) : '',
+    first ? normalizeLyricTransliterationText(first.transliteration).slice(0, 12) : '',
+    last ? normalizeLyricTransliterationText(last.transliteration).slice(0, 12) : ''
   ].join('|');
 }
 function lyricPrimaryVirtualIndex(index) {
   var n = Math.round(Number(index) || 0);
   if (!isFinite(n) || n === 0) return 0;
-  if (!lyricTranslationLayoutActive()) return n;
+  if (!lyricSecondaryLineLayoutActive()) return n;
   if (n < 0) return n * lyricPrimarySlotStepValue();
   var key = lyricPrimaryVirtualPrefixKey();
   if (!lyricPrimaryVirtualPrefixCache || lyricPrimaryVirtualPrefixCache.key !== key) {
@@ -100,6 +126,14 @@ function lyricPrimaryVirtualIndex(index) {
 }
 function lyricTranslationVirtualIndex(parentIndex) {
   return lyricPrimaryVirtualIndex(parentIndex) + lyricTranslationVisualGapValue();
+}
+// 音译行与译文行同构；两者同时开启时音译占用第二个附加槽位
+function lyricTransliterationVisualGapValue() {
+  var gap = lyricTranslationVisualGapValue();
+  return lyricTranslationLayoutActive() ? gap * 2 : gap;
+}
+function lyricTransliterationVirtualIndex(parentIndex) {
+  return lyricPrimaryVirtualIndex(parentIndex) + lyricTransliterationVisualGapValue();
 }
 function lyricTranslationScaleValue() {
   return clampRange(fx && fx.lyricTranslationScale == null ? fxDefaults.lyricTranslationScale : Number(fx && fx.lyricTranslationScale), 0.46, 1.12);

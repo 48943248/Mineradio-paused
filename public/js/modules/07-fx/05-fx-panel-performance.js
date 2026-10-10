@@ -408,6 +408,8 @@ function updateFxInputs() {
   updateLyricGlowControls();
   updateLyricDisplayModeControls();
   updateLyricTranslationModeControls();
+  updateLyricTransliterationModeControls();
+  updateLyricPlatformControls();
   updateLyricMotionStyleControls();
   updateLyricFontControls();
   updateLyricTextureClarityControls();

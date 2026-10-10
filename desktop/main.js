@@ -42,6 +42,8 @@ let desktopLyricsMousePoller = null;
 let desktopLyricsMousePollerBuffer = '';
 let desktopLyricsHotBounds = null;
 let desktopLyricsLastMiddleAt = 0;
+let desktopLyricsSettingsBroadcastTimer = null;
+let desktopLyricsPendingY = null;
 let htmlFullscreenActive = false;
 let windowFullscreenActive = false;
 let windowFullscreenDisplayId = null;
@@ -3588,6 +3590,82 @@ function setDesktopLyricsBounds(bounds) {
 function rememberDesktopLyricsBounds() {
   if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed() || desktopLyricsProgrammaticMove) return;
   desktopLyricsUserBounds = desktopLyricsWindow.getBounds();
+  syncDesktopLyricsYFromBounds(desktopLyricsUserBounds);
+}
+
+// 桌面歌词窗口内调节：只接受已知字段，并按主面板同一范围钳制
+function normalizeDesktopLyricsDisplayMode(value, fallback) {
+  const mode = String(value == null ? '' : value);
+  return mode === 'off' || mode === 'current' || mode === 'dual' || mode === 'multi' ? mode : fallback;
+}
+
+function normalizeDesktopLyricsSettingsPatch(patch) {
+  const source = patch && typeof patch === 'object' ? patch : {};
+  const has = (key) => Object.prototype.hasOwnProperty.call(source, key);
+  const next = {};
+  if (has('desktopLyricsSize')) next.desktopLyricsSize = clampNumber(source.desktopLyricsSize, 0.72, 1.55, 1);
+  if (has('desktopLyricsOpacity')) next.desktopLyricsOpacity = clampNumber(source.desktopLyricsOpacity, 0.28, 1, 0.92);
+  if (has('desktopLyricsY')) next.desktopLyricsY = clampNumber(source.desktopLyricsY, 0.08, 0.92, 0.76);
+  if (has('lyricTranslationMode')) next.lyricTranslationMode = normalizeDesktopLyricsDisplayMode(source.lyricTranslationMode, 'multi');
+  if (has('lyricTransliterationMode')) next.lyricTransliterationMode = normalizeDesktopLyricsDisplayMode(source.lyricTransliterationMode, 'off');
+  return next;
+}
+
+// fx 风格设置 → desktopLyricsState 字段（窗口实际渲染用）
+function desktopLyricsWindowStateFromSettings(settings) {
+  const patch = normalizeDesktopLyricsSettingsPatch(settings);
+  const next = {};
+  if (Object.prototype.hasOwnProperty.call(patch, 'desktopLyricsSize')) next.size = patch.desktopLyricsSize;
+  if (Object.prototype.hasOwnProperty.call(patch, 'desktopLyricsOpacity')) next.opacity = patch.desktopLyricsOpacity;
+  if (Object.prototype.hasOwnProperty.call(patch, 'desktopLyricsY')) next.y = patch.desktopLyricsY;
+  if (Object.prototype.hasOwnProperty.call(patch, 'lyricTranslationMode')) next.translationEnabled = patch.lyricTranslationMode !== 'off';
+  if (Object.prototype.hasOwnProperty.call(patch, 'lyricTransliterationMode')) next.transliterationEnabled = patch.lyricTransliterationMode !== 'off';
+  return next;
+}
+
+function broadcastDesktopLyricsSettingsState(patch) {
+  if (!patch || !Object.keys(patch).length) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('mineradio-desktop-lyrics-settings-state', patch);
+  }
+}
+
+// 窗口垂直中心 → fx.desktopLyricsY 比例（0.08~0.92），与 desktopLyricsDefaultBounds 互逆
+function desktopLyricsYRatioFromBounds(bounds) {
+  if (!bounds) return null;
+  const display = screen.getDisplayMatching(bounds);
+  const area = display && display.bounds;
+  if (!area || !(area.height > 0)) return null;
+  const centerY = bounds.y + bounds.height / 2;
+  return clampNumber((centerY - area.y) / area.height, 0.08, 0.92, 0.76);
+}
+
+function flushDesktopLyricsPendingY() {
+  desktopLyricsSettingsBroadcastTimer = null;
+  const ratio = desktopLyricsPendingY;
+  desktopLyricsPendingY = null;
+  if (ratio == null) return;
+  desktopLyricsState = { ...desktopLyricsState, y: ratio };
+  broadcastDesktopLyricsSettingsState({ desktopLyricsY: ratio, source: 'desktopLyricsDrag' });
+}
+
+// 拖动后把实际位置比例回传主面板；节流避免每个像素一次 IPC
+function syncDesktopLyricsYFromBounds(bounds, options = {}) {
+  const ratio = desktopLyricsYRatioFromBounds(bounds);
+  if (ratio == null) return null;
+  desktopLyricsPendingY = ratio;
+  if (options.immediate) {
+    if (desktopLyricsSettingsBroadcastTimer) {
+      clearTimeout(desktopLyricsSettingsBroadcastTimer);
+      desktopLyricsSettingsBroadcastTimer = null;
+    }
+    flushDesktopLyricsPendingY();
+    return ratio;
+  }
+  if (!desktopLyricsSettingsBroadcastTimer) {
+    desktopLyricsSettingsBroadcastTimer = setTimeout(flushDesktopLyricsPendingY, 140);
+  }
+  return ratio;
 }
 
 function applyDesktopLyricsMouseBehavior() {
@@ -4955,6 +5033,40 @@ ipcMain.handle('mineradio-desktop-lyrics-set-lock-state', async (_event, locked)
     return { ok: true, locked: desktopLyricsState.clickThrough !== false };
   } catch (e) {
     return { ok: false, error: e.message || 'DESKTOP_LYRICS_LOCK_FAILED' };
+  }
+});
+
+ipcMain.handle('mineradio-desktop-lyrics-settings', async (_event, patch) => {
+  try {
+    const source = patch && typeof patch === 'object' ? patch : {};
+    const settings = normalizeDesktopLyricsSettingsPatch(source);
+    const nextState = desktopLyricsWindowStateFromSettings(settings);
+    const previousOpacity = clampNumber(desktopLyricsState.opacity, 0.28, 1, 0.92);
+    const opacityChanged = Object.prototype.hasOwnProperty.call(nextState, 'opacity')
+      && Math.abs(nextState.opacity - previousOpacity) > 0.001;
+    const yChanged = Object.prototype.hasOwnProperty.call(nextState, 'y')
+      && Math.abs(nextState.y - clampNumber(desktopLyricsState.y, 0.08, 0.92, 0.76)) > 0.001;
+    if (Object.keys(nextState).length) desktopLyricsState = { ...desktopLyricsState, ...nextState };
+    if (opacityChanged && desktopLyricsWindow && !desktopLyricsWindow.isDestroyed() && typeof desktopLyricsWindow.setOpacity === 'function') {
+      desktopLyricsWindow.setOpacity(clampNumber(desktopLyricsState.opacity, 0.28, 1, 0.92));
+    }
+    if (yChanged) {
+      desktopLyricsUserBounds = null;
+      positionDesktopLyricsWindow(desktopLyricsState, { force: true });
+    }
+    sendDesktopLyricsState();
+    applyDesktopLyricsMouseBehavior();
+    // 窗口内拖动结束时按实际位置回传 Y 比例
+    let yRatio = null;
+    if (source.syncY === true && desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) {
+      yRatio = syncDesktopLyricsYFromBounds(desktopLyricsWindow.getBounds(), { immediate: true });
+    }
+    broadcastDesktopLyricsSettingsState(settings);
+    const result = { ok: true, settings };
+    if (yRatio != null) result.y = yRatio;
+    return result;
+  } catch (e) {
+    return { ok: false, error: e.message || 'DESKTOP_LYRICS_SETTINGS_FAILED' };
   }
 });
 

@@ -34,6 +34,7 @@
     "lyricGlowColor": "#9db8cf",
     "lyricDisplayMode": "cinema",
     "lyricTranslationMode": "multi",
+    "lyricTransliterationMode": "off",
     "lyricMotionStyle": "float",
     "lyricCustomLineCount": 10,
     "lyricGlitchCameraBind": true,

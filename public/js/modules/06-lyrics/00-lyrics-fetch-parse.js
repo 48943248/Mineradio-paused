@@ -13,6 +13,15 @@ function lyricTranslationTextFromAliases(source) {
   source = source || {};
   return source.tlyric || source.trans || source.translatedLyric || source.translation || source.translated_lyric || '';
 }
+// 二改：音译（罗马音 / 拼音），网易云的 romalrc / yromalrc，其它平台可能叫 roma / romaji。
+function lyricTransliterationTextFromAliases(source) {
+  source = source || {};
+  return source.romalrc || source.roma || source.romaji || source.transliteration || source.romanization || '';
+}
+function lyricYrcTransliterationTextFromAliases(source) {
+  source = source || {};
+  return source.yromalrc || source.yroma || '';
+}
 function lyricEndpointForSong(songOrId) {
   var song = (songOrId && typeof songOrId === 'object') ? songOrId : null;
   var provider = song ? songProviderKey(song) : 'netease';
@@ -36,12 +45,82 @@ function lyricEndpointForSong(songOrId) {
   return '/api/lyric?id=' + encodeURIComponent(songId);
 }
 
+// 二改：歌词平台。默认 auto = 跟随歌曲音源平台；点选某个平台后即"一键锁定"，
+// 之后所有歌曲都优先去该平台找同名同歌手的歌词，除非手动切回 auto 或换到别的平台。
+var LYRIC_PLATFORM_STORE_KEY = 'mineradio-lyric-platform-v1';
+var lyricPlatformPreference = readLyricPlatformPreference();
+var lyricPlatformMatchCache = Object.create(null);
+var LYRIC_PLATFORM_KEYS = ['auto', 'netease', 'qq', 'kugou', 'qishui', 'spotify'];
+
+function normalizeLyricPlatform(value) {
+  var raw = String(value == null ? '' : value).trim().toLowerCase();
+  return LYRIC_PLATFORM_KEYS.indexOf(raw) >= 0 ? raw : 'auto';
+}
+function readLyricPlatformPreference() {
+  try { return normalizeLyricPlatform(localStorage.getItem(LYRIC_PLATFORM_STORE_KEY) || 'auto'); } catch (e) { return 'auto'; }
+}
+function saveLyricPlatformPreference(value) {
+  try { localStorage.setItem(LYRIC_PLATFORM_STORE_KEY, normalizeLyricPlatform(value)); } catch (e) { }
+}
+function lyricPlatformLabel(value) {
+  return {
+    auto: '跟随音源',
+    netease: '网易云',
+    qq: 'QQ 音乐',
+    kugou: '酷狗音乐',
+    qishui: '汽水音乐',
+    spotify: 'Spotify'
+  }[normalizeLyricPlatform(value)] || '跟随音源';
+}
+function lyricPlatformSearchUrl(provider, query) {
+  var q = encodeURIComponent(query);
+  if (provider === 'qq') return '/api/qq/search?keywords=' + q + '&limit=8';
+  if (provider === 'kugou') return '/api/kugou/search?keywords=' + q + '&limit=8';
+  if (provider === 'qishui') return '/api/qishui/search?keywords=' + q + '&limit=8';
+  if (provider === 'spotify') return '/api/spotify/search?keywords=' + q + '&limit=8';
+  return '/api/search?keywords=' + q + '&limit=10';
+}
+function lyricPlatformQuery(song) {
+  song = song || {};
+  var artist = String(song.artist || '').split(/\s*\/\s*|\s*,\s*|&|、/)[0] || '';
+  return [song.name || song.title || '', artist].filter(Boolean).join(' ').trim();
+}
+function lyricPlatformSongEligible(song) {
+  if (!song) return false;
+  if (song.type === 'local' || song.source === 'local' || song.localUrl) return false;
+  if (song.type === 'podcast' || song.source === 'podcast') return false;
+  return !!lyricPlatformQuery(song);
+}
+// 把当前歌曲映射成"目标歌词平台上的同一首歌"，用于取该平台的歌词。
+async function resolveLyricSongForPlatform(song, provider) {
+  provider = normalizeLyricPlatform(provider);
+  if (provider === 'auto' || !lyricPlatformSongEligible(song)) return song;
+  if (songProviderKey(song) === provider) return song;
+  var cacheKey = provider + '|' + (song.id || song.mid || song.hash || song.name || '') + '|' + (song.artist || '');
+  if (lyricPlatformMatchCache[cacheKey] !== undefined) return lyricPlatformMatchCache[cacheKey] || song;
+  var matched = null;
+  try {
+    var data = await apiJson(lyricPlatformSearchUrl(provider, lyricPlatformQuery(song)), { timeoutMs: 6000 });
+    var list = data && (data.songs || data.result || []);
+    if (Array.isArray(list)) {
+      for (var i = 0; i < list.length; i++) {
+        if (typeof isSameTitleArtist === 'function' && isSameTitleArtist(song, list[i])) { matched = list[i]; break; }
+      }
+    }
+  } catch (e) {
+    matched = null;
+  }
+  lyricPlatformMatchCache[cacheKey] = matched || false;
+  return matched || song;
+}
+
 function persistentLyricCacheKey(song) {
   song = song || {};
   var provider = typeof songProviderKey === 'function' ? songProviderKey(song) : (song.source || song.provider || 'netease');
   var id = song.id || song.mid || song.songmid || song.hash || '';
   var artist = song.artist || song.singer || song.artists || '';
-  return ['lyrics-v1', provider, id, song.name || song.title || '', artist].join('|');
+  // v2：缓存键带上歌词平台，避免锁定不同平台时复用同一份歌词；同时让旧缓存（没有音译）自然失效。
+  return ['lyrics-v2', provider, id, song.name || song.title || '', artist, normalizeLyricPlatform(lyricPlatformPreference)].join('|');
 }
 
 function readPersistentLyricCache(song) {
@@ -276,10 +355,15 @@ function parseLyricResponseToOriginalState(song, response) {
   var lrcLines = parseLyricText(response.lyric || '');
   var translationPayload = buildLyricTranslationPayload(response);
   var translationLines = translationPayload.lines;
+  // 二改：音译（罗马音/拼音），与译文平行地贴到同一批歌词行上。
+  var transliterationPayload = buildLyricTransliterationPayload(response);
+  var transliterationLines = transliterationPayload.lines;
   var hasNativeKaraoke = nativeLines.some(function (line) { return line.words && line.words.length; });
   var timingSource = hasNativeKaraoke ? 'yrc-word' : (nativeLines.length ? 'yrc-line' : (lrcLines.length ? 'lrc-line' : 'fallback'));
   var primaryLines = nativeLines.length ? nativeLines : lrcLines;
-  var lines = withLyricFallbackForSong(song, attachLyricTranslations(primaryLines, translationLines));
+  var lines = attachLyricTranslations(primaryLines, translationLines);
+  lines = attachLyricTranslations(lines, transliterationLines, 'transliteration', 'romalrc');
+  lines = withLyricFallbackForSong(song, lines);
   if (lines.length && lines[0].fallback) timingSource = 'fallback';
   return {
     lines: cloneLyricLines(lines),
@@ -287,6 +371,8 @@ function parseLyricResponseToOriginalState(song, response) {
     timingSource: timingSource,
     translationLines: cloneLyricLines(translationLines),
     translationSource: translationPayload.source,
+    transliterationLines: cloneLyricLines(transliterationLines),
+    transliterationSource: transliterationPayload.source,
     usableLyric: hasUsableLyricLines(lines),
     cachedAt: Date.now()
   };
@@ -346,7 +432,9 @@ async function fetchLyric(songOrId, token, attempt) {
         return;
       }
     }
-    var r = await apiJson(lyricEndpointForSong(song || songOrId));
+    // 二改：先按"歌词平台"偏好把这首歌映射到目标平台，再取该平台的歌词。
+    var lyricPlatformSong = await resolveLyricSongForPlatform(song, lyricPlatformPreference);
+    var r = await apiJson(lyricEndpointForSong(lyricPlatformSong || song || songOrId));
     var state = applyFetchedLyricResponse(song, token, r);
     if (!state) return;
     if (!state.usableLyric && shouldRetryStartupLyricFetch(song, token, attempt)) scheduleStartupLyricFetchRetry(song, token, attempt);
@@ -505,7 +593,34 @@ function buildLyricTranslationPayload(response) {
   if (yrcTranslations.length) sources.push('ytlrc');
   return { lines: lines, source: sources.length ? sources.join('+') : 'none' };
 }
-function attachLyricTranslations(primaryLines, translationLines) {
+// 二改：音译（罗马音/拼音）。网易云给 romalrc/yromalrc，QQ 给 roma（可能不带时间轴）。
+function buildLyricTransliterationPayload(response) {
+  response = response || {};
+  var lrcRoman = markLyricLineSource(parseLyricText(lyricTransliterationTextFromAliases(response)), 'romalrc');
+  var yrcRoman = markLyricLineSource(parseYrcText(lyricYrcTransliterationTextFromAliases(response)), 'yromalrc');
+  var lines = mergeLyricTranslationLineSources(lrcRoman, yrcRoman);
+  var sources = [];
+  if (lrcRoman.length) sources.push('romalrc');
+  if (yrcRoman.length) sources.push('yromalrc');
+  if (!lines.length) {
+    lines = markLyricLineSource(parsePlainTransliterationLines(lyricTransliterationTextFromAliases(response)), 'roma-plain');
+    if (lines.length) sources.push('roma-plain');
+  }
+  return { lines: lines, source: sources.length ? sources.join('+') : 'none' };
+}
+// 没有时间轴的音译文本（例如 QQ 的 roma）：按行序铺开，交给顺序匹配去对齐。
+function parsePlainTransliterationLines(text) {
+  var out = [];
+  String(text || '').split(/\r?\n/).forEach(function (raw) {
+    var line = String(raw || '').replace(/\[\d{1,2}:\d{1,2}(?:\.\d{1,3})?\]/g, '').trim();
+    if (!line) return;
+    out.push({ t: out.length, text: line, duration: 0 });
+  });
+  return out;
+}
+function attachLyricTranslations(primaryLines, translationLines, targetField, sourceTag) {
+  var field = targetField === 'transliteration' ? 'transliteration' : 'translation';
+  var defaultSource = sourceTag || (field === 'transliteration' ? 'romalrc' : 'tlyric');
   var primary = cloneLyricLines(primaryLines || []);
   var translations = usableLyricTranslationLines(translationLines || []);
   if (!primary.length || !translations.length) return primary;
@@ -587,10 +702,17 @@ function attachLyricTranslations(primaryLines, translationLines) {
     if (line && best) {
       var translated = normalizeLyricTranslationText(best.text);
       if (translated && translated !== normalizeStageLyricText(line.text)) {
-        line.translation = translated;
-        line.translationTime = best.t;
-        line.translationSource = best.source || 'tlyric';
-        line.translationMatch = assignments[key].phase || 'time';
+        if (field === 'transliteration') {
+          line.transliteration = translated;
+          line.transliterationTime = best.t;
+          line.transliterationSource = best.source || defaultSource;
+          line.transliterationMatch = assignments[key].phase || 'time';
+        } else {
+          line.translation = translated;
+          line.translationTime = best.t;
+          line.translationSource = best.source || defaultSource;
+          line.translationMatch = assignments[key].phase || 'time';
+        }
       }
     }
   });

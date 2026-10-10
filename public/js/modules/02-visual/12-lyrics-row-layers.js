@@ -11,9 +11,25 @@ function lyricLineCenterWorldY(mask, entry, lineIndex, worldH) {
   return (0.5 - clampRange(centerY / h, 0, 1)) * worldH;
 }
 
+// 二改：译文行与音译行都是「附加行」，行图层必须同等识别，否则音译行会被当成主行丢弃。
+function isSecondaryLyricRowEntry(entry) {
+  return !!(entry && (entry.translationLine || entry.transliterationLine));
+}
+function lyricSecondaryVirtualIndex(entry) {
+  entry = entry || {};
+  if (entry.parentIndex == null || !isFinite(Number(entry.parentIndex))) return null;
+  var parent = Number(entry.parentIndex);
+  if (entry.transliterationLine && typeof lyricTransliterationVirtualIndex === 'function') return lyricTransliterationVirtualIndex(parent);
+  return lyricTranslationVirtualIndex(parent);
+}
+function lyricSecondaryVisualGapValue(entry) {
+  if (entry && entry.transliterationLine && typeof lyricTransliterationVisualGapValue === 'function') return lyricTransliterationVisualGapValue();
+  return lyricTranslationVisualGapValue();
+}
 function lyricRowVirtualIndex(entry, fallbackIndex) {
   entry = entry || {};
-  if (entry.translationLine && entry.parentIndex != null && isFinite(Number(entry.parentIndex))) return lyricTranslationVirtualIndex(entry.parentIndex);
+  var secondaryIndex = lyricSecondaryVirtualIndex(entry);
+  if (secondaryIndex != null) return secondaryIndex;
   if (entry.lineIndex != null && isFinite(Number(entry.lineIndex))) return lyricPrimaryVirtualIndex(entry.lineIndex);
   if (entry.virtualIndex != null && isFinite(Number(entry.virtualIndex))) return Number(entry.virtualIndex);
   return Number(fallbackIndex) || 0;
@@ -23,7 +39,7 @@ function lyricLayerVirtualIndex(entry, fallbackIndex, activeLine, usesTrack) {
   entry = entry || {};
   if (!usesTrack) {
     var localActive = activeLine != null && isFinite(Number(activeLine)) ? Number(activeLine) : 0;
-    if (entry.translationLine && entry.parentRole === 'current') return localActive + lyricTranslationVisualGapValue();
+    if (isSecondaryLyricRowEntry(entry) && entry.parentRole === 'current') return localActive + lyricSecondaryVisualGapValue(entry);
     return Number(fallbackIndex) || 0;
   }
   return lyricRowVirtualIndex(entry, fallbackIndex);
@@ -35,7 +51,7 @@ function lyricTrackLineStepWorld(mask, worldH) {
   var lineHeight = Number(mask.lineHeight) || Number(mask.fontSize) || 128;
   var step = worldH * (lineHeight / h);
   step *= clampRange(1 + (lyricContextSpreadValue() - 1) * 0.32, 0.86, 1.45);
-  if (lyricTranslationLayoutActive()) step *= 1.06;
+  if (lyricSecondaryLineLayoutActive()) step *= 1.06;
   return clampRange(step, 0.22, 0.94);
 }
 
@@ -44,7 +60,7 @@ function lyricTranslationLineStepWorld(mask, worldH) {
   var h = Math.max(1, Number(mask.height) || 384);
   var lineHeight = Number(mask.lineHeight) || Number(mask.fontSize) || 128;
   var step = worldH * (lineHeight / h);
-  if (lyricTranslationLayoutActive()) step *= 1.04;
+  if (lyricSecondaryLineLayoutActive()) step *= 1.04;
   return clampRange(step, 0.20, 0.78);
 }
 
@@ -112,7 +128,7 @@ function lyricRowVisualDelta(entry, index, activeLine) {
     var trackIndex = activeLine != null && isFinite(Number(activeLine)) ? Number(activeLine) : 0;
     raw = lyricRowVirtualIndex(entry, index) - trackIndex;
   }
-  if (entry.translationLine && entry.parentRole === 'current' && !(entry.virtualIndex != null || entry.lineIndex != null || entry.parentIndex != null)) {
+  if (isSecondaryLyricRowEntry(entry) && entry.parentRole === 'current' && !(entry.virtualIndex != null || entry.lineIndex != null || entry.parentIndex != null)) {
     var gap = lyricTranslationGapValue();
     return raw >= 0 ? gap : -gap;
   }
@@ -200,7 +216,7 @@ function lyricReadabilityColorForBrightBackdrop(strength) {
 
 function makeLyricLineMask(entry, baseMask, asActive) {
   entry = entry || {};
-  var primaryLine = !entry.translationLine;
+  var primaryLine = !isSecondaryLyricRowEntry(entry);
   var drawEntry = cloneStageLyricEntryForLayer(entry, {
     role: asActive ? 'current' : (entry.role || 'context'),
     alpha: 1,
@@ -218,7 +234,7 @@ function makeLyricLineMask(entry, baseMask, asActive) {
 }
 
 function lyricTranslationMeshScale(entry) {
-  if (!entry || !entry.translationLine) return 1;
+  if (!isSecondaryLyricRowEntry(entry)) return 1;
   var scale = isFinite(Number(entry.scale)) ? Number(entry.scale) : lyricTranslationScaleValue();
   var defaultScale = fxDefaults && isFinite(Number(fxDefaults.lyricTranslationScale)) ? Number(fxDefaults.lyricTranslationScale) : 0.78;
   var roleBoost = entry.parentRole === 'current' ? 1.08 : 0.92;
@@ -372,7 +388,7 @@ function beginLyricRowLayerGroupBuild(payload, mask, worldW, worldH, pal, motion
   var totalPhases = 0;
   for (var pi = 0; pi < entries.length; pi++) {
     var phaseEntry = entries[pi] || {};
-    var phaseHasGlow = !phaseEntry.translationLine || phaseEntry.parentRole === 'current' || usesTrack;
+    var phaseHasGlow = !isSecondaryLyricRowEntry(phaseEntry) || phaseEntry.parentRole === 'current' || usesTrack;
     totalPhases += textOnly ? 1 : (1 + readabilityPhaseCount + (phaseHasGlow ? glowPhaseCount : 1));
   }
   root.add(contextGroup);
@@ -421,12 +437,12 @@ function beginLyricRowLayerBuildEntry(state) {
   var virtualIndex = lyricLayerVirtualIndex(entry, i, state.activeLine, state.usesTrack);
   var delta = virtualIndex - state.activeLine;
   var entryLineIndex = entry.lineIndex != null && isFinite(Number(entry.lineIndex)) ? Number(entry.lineIndex) : null;
-  var isActive = !entry.translationLine && (state.usesTrack ? entryLineIndex === state.activeLineIndex : Math.abs(delta) < 0.001);
+  var isActive = !isSecondaryLyricRowEntry(entry) && (state.usesTrack ? entryLineIndex === state.activeLineIndex : Math.abs(delta) < 0.001);
   var lineMask = makeLyricLineMask(entry, state.mask, isActive);
   var lineWorldW = lyricRowLogicalWorldWidth(lineMask, state.worldW);
   var lineWorldH = lineWorldW * (lineMask.height / lineMask.width);
   var lineY = -delta * state.lineStepWorld;
-  if (entry.translationLine) {
+  if (isSecondaryLyricRowEntry(entry)) {
     var translationLayoutEntry = !state.usesTrack
       ? cloneStageLyricEntryForLayer(entry, { virtualIndex: virtualIndex })
       : entry;
@@ -436,10 +452,10 @@ function beginLyricRowLayerBuildEntry(state) {
   var lineZ = 0.055 - Math.pow(lineAbs, 1.06) * 0.145;
   var lineScale = clampRange(1 - lineAbs * 0.026, 0.84, 1.02);
   var fontScale = lyricTranslationMeshScale(entry);
-  if (entry.translationLine) lineScale *= fontScale;
+  if (isSecondaryLyricRowEntry(entry)) lineScale *= fontScale;
   var lineGeo = new THREE.PlaneGeometry(lineWorldW, lineWorldH, 1, 1);
   var material;
-  if (!entry.translationLine) {
+  if (!isSecondaryLyricRowEntry(entry)) {
     material = makeLyricShaderMaterial(lineMask, state.pal, state.motionProfile);
     material.uniforms.uOpacity.value = 0;
     if (material.uniforms.uActiveMix) material.uniforms.uActiveMix.value = isActive ? 1 : 0;
@@ -447,7 +463,7 @@ function beginLyricRowLayerBuildEntry(state) {
     material = makeLyricBackfaceReadableMaterial({
       map: lineMask.texture,
       opacity: 0,
-      color: entry.translationLine
+      color: isSecondaryLyricRowEntry(entry)
         ? lyricThreeColor(state.pal.highlight || state.pal.primary, '#eaf6ff', 0.42)
         : lyricThreeColor(state.pal.primary || state.pal.secondary, '#d6f8ff', 0.34)
     });
@@ -494,8 +510,9 @@ function beginLyricRowLayerBuildEntry(state) {
     lineWorldH: lineWorldH,
     text: entry.text || '',
     isActive: isActive,
-    isPrimary: !entry.translationLine,
+    isPrimary: !isSecondaryLyricRowEntry(entry),
     isTranslation: !!entry.translationLine,
+    isTransliteration: !!entry.transliterationLine,
     targetAlpha: targetAlpha,
     baseY: lineY,
     baseZ: lineZ,
@@ -505,6 +522,7 @@ function beginLyricRowLayerBuildEntry(state) {
     virtualIndex: virtualIndex,
     lineIndex: entryLineIndex,
     parentIndex: entry.parentIndex != null && isFinite(Number(entry.parentIndex)) ? Number(entry.parentIndex) : undefined,
+    transliterationLine: !!entry.transliterationLine,
     parentRole: entry.parentRole || '',
     delta: delta,
     renderWindowActive: false,

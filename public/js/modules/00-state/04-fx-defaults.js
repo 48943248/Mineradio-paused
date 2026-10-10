@@ -30,6 +30,8 @@ var fxDefaults = {
   lyricGlowColor: '#9db8cf',
   lyricDisplayMode: 'cinema',
   lyricTranslationMode: 'multi',
+  // 二改：歌词音译（罗马音/拼音），默认关闭，档位与译文一致。
+  lyricTransliterationMode: 'off',
   lyricMotionStyle: 'float',
   lyricCustomLineCount: 10,
   lyricGlitchCameraBind: true,

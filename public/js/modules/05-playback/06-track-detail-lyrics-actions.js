@@ -798,7 +798,9 @@ function lyricLineSignaturePart(line) {
     Math.round((Number(firstWord.d) || 0) * 1000),
     Math.round((Number(lastWord.t) || 0) * 1000),
     Math.round((Number(lastWord.d) || 0) * 1000),
-    String(line.translation || '')
+    String(line.translation || ''),
+    // 二改：音译也要参与签名，否则音译变化不会触发歌词重渲染。
+    String(line.transliteration || '')
   ].join('\u001f');
 }
 function lyricLinesSignature(lines) {
@@ -991,6 +993,13 @@ function updateLyricTranslationModeControls() {
     btn.classList.toggle('active', btn.dataset.translation === mode);
   });
 }
+// 二改：歌词音译（罗马音/拼音）档位同步。
+function updateLyricTransliterationModeControls() {
+  var mode = normalizeLyricTransliterationMode(fx && fx.lyricTransliterationMode);
+  document.querySelectorAll('#lyric-transliteration-mode-seg button').forEach(function (btn) {
+    btn.classList.toggle('active', btn.dataset.transliteration === mode);
+  });
+}
 function updateLyricMotionStyleControls() {
   var style = normalizeLyricMotionStyle(fx && fx.lyricMotionStyle);
   var seg = document.getElementById('lyric-motion-style-seg');
@@ -1037,6 +1046,38 @@ function setLyricTranslationMode(mode) {
   refreshStageLyricDisplayMode();
   saveLyricLayout({ user: true, reason: 'lyricTranslationMode' });
   showToast('双语翻译已切换');
+}
+// 二改：歌词平台。点一次即锁定（一键锁定），除非手动切回"跟随音源"或换到别的平台。
+function updateLyricPlatformControls() {
+  var mode = normalizeLyricPlatform(typeof lyricPlatformPreference === 'string' ? lyricPlatformPreference : 'auto');
+  document.querySelectorAll('#lyric-platform-seg button').forEach(function (btn) {
+    btn.classList.toggle('active', btn.dataset.lyricPlatform === mode);
+  });
+}
+function setLyricPlatform(mode) {
+  lyricPlatformPreference = normalizeLyricPlatform(mode);
+  saveLyricPlatformPreference(lyricPlatformPreference);
+  if (typeof lyricPlatformMatchCache === 'object' && lyricPlatformMatchCache) lyricPlatformMatchCache = Object.create(null);
+  updateLyricPlatformControls();
+  if (typeof showToast === 'function') {
+    showToast(lyricPlatformPreference === 'auto'
+      ? '歌词平台已恢复：跟随音源'
+      : '歌词平台已锁定：' + lyricPlatformLabel(lyricPlatformPreference));
+  }
+  // 立刻按新的歌词平台重抓当前歌曲歌词。
+  if (typeof fetchLyric === 'function' && typeof currentLyricSong === 'function') {
+    var song = currentLyricSong();
+    var usable = song && song.type !== 'local' && song.source !== 'local' && !song.localUrl && song.type !== 'podcast';
+    if (usable && typeof trackSwitchToken === 'number') fetchLyric(song, trackSwitchToken);
+  }
+}
+function setLyricTransliterationMode(mode) {
+  fx.lyricTransliterationMode = normalizeLyricTransliterationMode(mode);
+  updateLyricTransliterationModeControls();
+  refreshStageLyricDisplayMode();
+  saveLyricLayout({ user: true, reason: 'lyricTransliterationMode' });
+  pushDesktopLyricsState(true);
+  showToast(fx.lyricTransliterationMode === 'off' ? '歌词音译已关闭' : '歌词音译已切换');
 }
 function setLyricMotionStyle(style) {
   fx.lyricMotionStyle = normalizeLyricMotionStyle(style);

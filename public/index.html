@@ -669,6 +669,15 @@
               <button id="lyric-source-custom" type="button" onclick="setLyricSourceMode('custom')">自定义</button>
             </div>
           </div>
+          <div class="fx-section-label">歌词平台</div>
+          <div class="fx-seg lyric-platform-seg" id="lyric-platform-seg">
+            <button type="button" data-lyric-platform="auto" onclick="setLyricPlatform('auto')">跟随音源</button>
+            <button type="button" data-lyric-platform="netease" onclick="setLyricPlatform('netease')">网易云</button>
+            <button type="button" data-lyric-platform="qq" onclick="setLyricPlatform('qq')">QQ</button>
+            <button type="button" data-lyric-platform="kugou" onclick="setLyricPlatform('kugou')">酷狗</button>
+            <button type="button" data-lyric-platform="qishui" onclick="setLyricPlatform('qishui')">汽水</button>
+            <button type="button" data-lyric-platform="spotify" onclick="setLyricPlatform('spotify')">SP</button>
+          </div>
           <div class="fx-section-label">歌词行数</div>
           <div class="fx-seg lyric-display-mode-seg" id="lyric-display-mode-seg">
             <button type="button" data-mode="single" onclick="setLyricDisplayMode('single')">单行</button>
@@ -685,6 +694,13 @@
             <button type="button" data-translation="current" onclick="setLyricTranslationMode('current')">当前</button>
             <button type="button" data-translation="dual" onclick="setLyricTranslationMode('dual')">双行</button>
             <button type="button" data-translation="multi" onclick="setLyricTranslationMode('multi')">多行</button>
+          </div>
+          <div class="fx-section-label">歌词音译</div>
+          <div class="fx-seg lyric-transliteration-mode-seg" id="lyric-transliteration-mode-seg">
+            <button type="button" data-transliteration="off" onclick="setLyricTransliterationMode('off')">关闭</button>
+            <button type="button" data-transliteration="current" onclick="setLyricTransliterationMode('current')">当前</button>
+            <button type="button" data-transliteration="dual" onclick="setLyricTransliterationMode('dual')">双行</button>
+            <button type="button" data-transliteration="multi" onclick="setLyricTransliterationMode('multi')">多行</button>
           </div>
           <div class="fx-section-label">歌词动画</div>
           <div class="fx-seg lyric-motion-style-seg" id="lyric-motion-style-seg">

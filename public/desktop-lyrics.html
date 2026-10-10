@@ -15,6 +15,9 @@
       --lyric-letter-spacing:0px;
       --lyric-line-height:1;
       --lyric-size:58px;
+      --lyric-translation-size:36px;
+      --lyric-transliteration-size:36px;
+      --lyric-sub-gap:6px;
       --lyric-progress:0%;
       --lyric-feather:5.5%;
       --lyric-fit-x:1;
@@ -121,6 +124,60 @@
     }
     .line.in{animation:lyr-in 820ms cubic-bezier(.16,.84,.32,1.02) forwards}
     body.paused .line{filter:none;opacity:.84}
+    .line.sub{
+      display:block;
+      width:max-content;
+      max-width:none;
+      margin:var(--lyric-sub-gap) auto 0;
+      padding:.06em .12em .12em;
+      font-size:var(--lyric-translation-size);
+      line-height:1.22;
+      letter-spacing:var(--lyric-letter-spacing);
+      background:linear-gradient(90deg,var(--lyric-secondary),var(--lyric-secondary));
+      -webkit-text-stroke:.1px rgba(255,255,255,.46);
+      text-shadow:0 0 1px rgba(255,255,255,.24),0 0 calc(9px + var(--lyric-css-beat-glow)) var(--lyric-shadow-glow);
+      opacity:.92;
+    }
+    #translation{font-size:var(--lyric-translation-size)}
+    #transliteration{
+      font-size:var(--lyric-transliteration-size);
+      background:linear-gradient(90deg,var(--lyric-highlight),var(--lyric-highlight));
+      opacity:.86;
+    }
+    .line.sub.hidden{display:none}
+    body.paused .line.sub{opacity:.66}
+    body.paused #transliteration{opacity:.58}
+    .lyric-controls{
+      display:none;
+      align-items:center;
+      gap:4px;
+      padding-left:8px;
+      margin-left:2px;
+      border-left:1px solid rgba(255,255,255,.14);
+    }
+    body.unlocked .lyric-controls{display:flex}
+    .ctrl-btn{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      height:20px;
+      min-width:26px;
+      padding:0 6px;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:8px;
+      background:rgba(255,255,255,.06);
+      color:rgba(255,255,255,.82);
+      font:800 11px/1 "Microsoft YaHei",sans-serif;
+      cursor:pointer;
+      text-shadow:0 0 8px rgba(0,0,0,.5);
+      -webkit-app-region:no-drag;
+    }
+    .ctrl-btn:hover{background:rgba(255,255,255,.16);color:#fff}
+    .ctrl-btn.active{
+      border-color:color-mix(in srgb,var(--lyric-glow) 72%,rgba(255,255,255,.4));
+      background:color-mix(in srgb,var(--lyric-glow) 26%,rgba(4,6,10,.44));
+      color:#fff;
+    }
     .lock-hint{
       position:absolute;
       z-index:4;
@@ -187,8 +244,8 @@
   <canvas id="fx"></canvas>
   <div class="wrap">
     <div id="stage" class="stage">
-      <div id="lyricViewport" class="lyric-viewport"><div id="lyricScroller" class="lyric-scroll"><div id="line" class="line" data-text="Mineradio">Mineradio</div></div></div>
-      <div id="lockHint" class="lock-hint"><span class="lock-icon"></span><span id="lockText">&#20013;&#38190;&#35299;&#38145;</span><button id="closeLyricsBtn" class="lyrics-close" type="button" aria-label="Close desktop lyrics">&#20851;&#38381;&#26700;&#38754;&#27468;&#35789;</button></div>
+      <div id="lyricViewport" class="lyric-viewport"><div id="lyricScroller" class="lyric-scroll"><div id="line" class="line" data-text="Mineradio">Mineradio</div><div id="translation" class="line sub hidden"></div><div id="transliteration" class="line sub hidden"></div></div></div>
+      <div id="lockHint" class="lock-hint"><span class="lock-icon"></span><span id="lockText">&#20013;&#38190;&#35299;&#38145;</span><div id="lyricControls" class="lyric-controls"><button id="fontMinusBtn" class="ctrl-btn" type="button">&#23383;&#21495;-</button><button id="fontPlusBtn" class="ctrl-btn" type="button">&#23383;&#21495;+</button><button id="opacityMinusBtn" class="ctrl-btn" type="button">&#36879;&#26126;-</button><button id="opacityPlusBtn" class="ctrl-btn" type="button">&#36879;&#26126;+</button><button id="translationToggleBtn" class="ctrl-btn" type="button">&#35793;&#25991;</button><button id="transliterationToggleBtn" class="ctrl-btn" type="button">&#38899;&#35793;</button></div><button id="closeLyricsBtn" class="lyrics-close" type="button" aria-label="Close desktop lyrics">&#20851;&#38381;&#26700;&#38754;&#27468;&#35789;</button></div>
     </div>
   </div>
   <script>
@@ -198,9 +255,22 @@
     var stage = document.getElementById('stage');
     var lyricViewport = document.getElementById('lyricViewport');
     var line = document.getElementById('line');
+    var translationLine = document.getElementById('translation');
+    var transliterationLine = document.getElementById('transliteration');
     var lockHint = document.getElementById('lockHint');
     var lockText = document.getElementById('lockText');
     var closeLyricsBtn = document.getElementById('closeLyricsBtn');
+    var lyricControls = document.getElementById('lyricControls');
+    var fontMinusBtn = document.getElementById('fontMinusBtn');
+    var fontPlusBtn = document.getElementById('fontPlusBtn');
+    var opacityMinusBtn = document.getElementById('opacityMinusBtn');
+    var opacityPlusBtn = document.getElementById('opacityPlusBtn');
+    var translationToggleBtn = document.getElementById('translationToggleBtn');
+    var transliterationToggleBtn = document.getElementById('transliterationToggleBtn');
+    var LYRIC_SUB_SIZE_RATIO = .62;
+    var LYRIC_SUB_GAP = 6;
+    var LYRIC_SIZE_STEP = .06;
+    var LYRIC_OPACITY_STEP = .06;
     var dpr = 1;
     var lastText = '';
     var progressText = '';
@@ -222,7 +292,8 @@
     var particles = [];
     var live = { solar:0, beat:0, bass:0, scale:1, glow:0, spark:0, lift:0 };
     var state = {
-      enabled:false,text:'Mineradio',progress:0,progressSpan:4.8,progressReceivedAt:0,playing:false,
+      enabled:false,text:'Mineradio',translation:'',transliteration:'',translationEnabled:true,transliterationEnabled:false,
+      progress:0,progressSpan:4.8,progressReceivedAt:0,playing:false,
       playbackTime:0,playbackDuration:0,playbackRate:1,playbackReceivedAt:0,beatMapKey:'',
       size:1,opacity:.92,clickThrough:true,lyricGlowParticles:false,cinema:true,highlightFollow:false,frameRate:60,
       lyricGlow:true,lyricGlowBeat:true,lyricGlowStrength:.35,highBloom:0,beatGlow:0,beatPulse:0,bass:0,feather:.055,
@@ -256,6 +327,28 @@
     function rand(seed){ return Math.abs(Math.sin(seed * 9283.173) * 43758.5453) % 1; }
     function isLocked(){ return state.clickThrough !== false; }
     function setRootVar(name, value){ document.documentElement.style.setProperty(name, value); }
+    function lyricSubText(value){ return String(value == null ? '' : value).replace(/\s+/g,' ').trim(); }
+    function lyricSubFontSize(mainSize){ return Math.max(12, Math.round(mainSize * LYRIC_SUB_SIZE_RATIO)); }
+    function translationRowVisible(){ return state.translationEnabled !== false && !!lyricSubText(state.translation); }
+    function transliterationRowVisible(){ return state.transliterationEnabled === true && !!lyricSubText(state.transliteration); }
+    function setSubLineText(el, text, visible){
+      if (!el) return false;
+      var shown = visible ? text : '';
+      var changed = el.textContent !== shown;
+      if (changed) el.textContent = shown;
+      var hidden = !visible;
+      if (el.classList.contains('hidden') !== hidden) el.classList.toggle('hidden', hidden);
+      return changed;
+    }
+    // 译文/音译行文本与开关状态同步；返回是否有变化（需要重新排版）
+    function refreshLyricRows(){
+      var changed = false;
+      if (setSubLineText(translationLine, lyricSubText(state.translation), translationRowVisible())) changed = true;
+      if (setSubLineText(transliterationLine, lyricSubText(state.transliteration), transliterationRowVisible())) changed = true;
+      if (translationToggleBtn) translationToggleBtn.classList.toggle('active', state.translationEnabled !== false);
+      if (transliterationToggleBtn) transliterationToggleBtn.classList.toggle('active', state.transliterationEnabled === true);
+      return changed;
+    }
     var colorCtx = document.createElement('canvas').getContext('2d');
     function parseCssColor(color, fallback) {
       fallback = fallback || '#ffffff';
@@ -567,14 +660,41 @@
       ctx.setTransform(dpr,0,0,dpr,0,0);
       fitLyricText(true);
     }
+    // 参与排版的行：主行 + 可见的译文/音译行
+    function desktopLyricRows() {
+      var rows = [{ el:line, text:line.textContent || 'Mineradio', sub:false }];
+      if (translationLine && !translationLine.classList.contains('hidden') && translationLine.textContent) {
+        rows.push({ el:translationLine, text:translationLine.textContent, sub:true });
+      }
+      if (transliterationLine && !transliterationLine.classList.contains('hidden') && transliterationLine.textContent) {
+        rows.push({ el:transliterationLine, text:transliterationLine.textContent, sub:true });
+      }
+      return rows;
+    }
+    function lyricRowFontSize(row, mainSize) {
+      return row.sub ? lyricSubFontSize(mainSize) : mainSize;
+    }
+    // 整个歌词块（主行 + 译文/音译行）的总高度，供 maxHeight 预算使用
+    function lyricStackHeight(mainSize, subRowCount) {
+      var height = mainSize * state.lineHeight;
+      if (!subRowCount) return height;
+      return height + subRowCount * (lyricSubFontSize(mainSize) * 1.22 + LYRIC_SUB_GAP);
+    }
     function measureLineWidth(fontSize) {
       ctx.save();
-      ctx.font = state.fontWeight + ' ' + fontSize + 'px ' + state.fontFamily;
-      var text = line.textContent || 'Mineradio';
-      var width = ctx.measureText(text).width;
+      var rows = desktopLyricRows();
+      var maxWidth = 1;
+      for (var i = 0; i < rows.length; i++) {
+        var text = rows[i].text;
+        if (!text) continue;
+        var size = lyricRowFontSize(rows[i], fontSize);
+        ctx.font = state.fontWeight + ' ' + size + 'px ' + state.fontFamily;
+        var width = ctx.measureText(text).width;
+        width += Math.max(0, Array.from(text).length - 1) * fontSize * state.letterSpacing;
+        if (width > maxWidth) maxWidth = width;
+      }
       ctx.restore();
-      width += Math.max(0, Array.from(text).length - 1) * fontSize * state.letterSpacing;
-      return Math.max(1, width);
+      return Math.max(1, maxWidth);
     }
     function lyricScrollInitialHoldMs() {
       return Math.round(clamp(state.progressSpan * 130, 140, 520, 320));
@@ -590,8 +710,11 @@
       var clearWidth = Math.max(160, viewportWidth - edgeWidth * 2);
       var readableWidth = clearWidth;
       var maxHeight = Math.max(64, innerHeight - 188);
+      var subRowCount = (translationRowVisible() ? 1 : 0) + (transliterationRowVisible() ? 1 : 0);
       var nextLayoutKey = [
         line.textContent || '',
+        translationRowVisible() ? lyricSubText(state.translation) : '',
+        transliterationRowVisible() ? lyricSubText(state.transliteration) : '',
         baseFontSize,
         state.fontFamily,
         state.fontWeight,
@@ -613,7 +736,7 @@
       var maxScrollableWidth = readableWidth * 1.76;
       for (var i = 0; i < 24; i++) {
         var width = measureLineWidth(size);
-        var height = size * state.lineHeight;
+        var height = lyricStackHeight(size, subRowCount);
         if ((width <= maxScrollableWidth && height <= maxHeight) || size <= minSize) break;
         size = Math.max(minSize, size - Math.max(1.25, size * .062));
       }
@@ -645,6 +768,8 @@
       }
       renderedFontSize = Math.round(size);
       setRootVar('--lyric-size', renderedFontSize + 'px');
+      setRootVar('--lyric-translation-size', lyricSubFontSize(renderedFontSize) + 'px');
+      setRootVar('--lyric-transliteration-size', lyricSubFontSize(renderedFontSize) + 'px');
       setRootVar('--lyric-vertical-feather', Math.round(clamp(renderedFontSize * .92, 38, 72, 46)) + 'px');
       setRootVar('--lyric-letter-spacing', (renderedFontSize * state.letterSpacing).toFixed(2) + 'px');
       setRootVar('--lyric-fit-x', fitScaleX.toFixed(4));
@@ -795,6 +920,10 @@
         hideInteractionHint();
         setPointerCapture(false);
       }
+      state.translation = lyricSubText(state.translation);
+      state.transliteration = lyricSubText(state.transliteration);
+      state.translationEnabled = state.translationEnabled !== false;
+      state.transliterationEnabled = state.transliterationEnabled === true;
       if (text !== lastText) {
         lastText = text;
         progressText = text;
@@ -808,6 +937,7 @@
         layoutKey = '';
         replayLineAnimation();
       }
+      if (refreshLyricRows()) layoutKey = '';
       fitLyricText(false);
     }
     function currentDisplayProgress() {
@@ -942,14 +1072,40 @@
       ctx.fill();
       ctx.restore();
     }
+    // 需要光晕的行（主行 + 译文/音译行），各自按自身位置与字号绘制
+    function lyricGlowRows() {
+      var rows = [];
+      var mainText = line.textContent || 'Mineradio';
+      var mainRect = line.getBoundingClientRect();
+      rows.push({ text:mainText, size:renderedFontSize, sub:false, cx:mainRect.left + mainRect.width / 2, cy:mainRect.top + mainRect.height / 2 });
+      if (translationLine && !translationLine.classList.contains('hidden') && translationLine.textContent) {
+        var translationRect = translationLine.getBoundingClientRect();
+        rows.push({
+          text:translationLine.textContent,
+          size:lyricSubFontSize(renderedFontSize),
+          sub:true,
+          cx:translationRect.left + translationRect.width / 2,
+          cy:translationRect.top + translationRect.height / 2
+        });
+      }
+      if (transliterationLine && !transliterationLine.classList.contains('hidden') && transliterationLine.textContent) {
+        var transliterationRect = transliterationLine.getBoundingClientRect();
+        rows.push({
+          text:transliterationLine.textContent,
+          size:lyricSubFontSize(renderedFontSize),
+          sub:true,
+          cx:transliterationRect.left + transliterationRect.width / 2,
+          cy:transliterationRect.top + transliterationRect.height / 2
+        });
+      }
+      return rows;
+    }
     function drawGlowText(rect, motion) {
       if (!state.lyricGlow || motion.glowStrength <= 0) return;
       var target = Math.min(1.08, (0.09 + live.solar * .38 + live.beat * .22) * Math.min(3, motion.glowDrive));
       live.glow += (target - live.glow) * (target > live.glow ? .11 : .06);
       if (live.glow <= .004) return;
-      var text = line.textContent || 'Mineradio';
-      var cx = rect.left + rect.width / 2;
-      var cy = rect.top + rect.height / 2;
+      var rows = lyricGlowRows();
       var spacing = renderedFontSize * state.letterSpacing;
       var hotMix = Math.max(0, Math.min(1, live.solar * 1.05 + live.beat * .18));
       var color = hotMix > .42 ? state.displayColors.highlight : state.displayColors.glow;
@@ -963,19 +1119,25 @@
       ctx.globalCompositeOperation = 'lighter';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = state.fontWeight + ' ' + renderedFontSize + 'px ' + state.fontFamily;
-      ctx.translate(cx, cy);
-      ctx.scale(fitScaleX * live.scale, live.scale);
-      for (var i = 0; i < layers.length; i++) {
+      for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        var rowScale = row.size / Math.max(1, renderedFontSize);
         ctx.save();
-        ctx.filter = 'blur(' + layers[i].blur + 'px)';
-        ctx.globalAlpha = live.glow * layers[i].alpha * clamp(state.opacity, .28, 1, .92);
-        ctx.fillStyle = color;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = layers[i].stroke;
-        ctx.lineJoin = 'round';
-        drawCanvasText(text, 0, 0, renderedFontSize, spacing, true);
-        drawCanvasText(text, 0, 0, renderedFontSize, spacing, false);
+        ctx.font = state.fontWeight + ' ' + row.size + 'px ' + state.fontFamily;
+        ctx.translate(row.cx, row.cy);
+        ctx.scale(fitScaleX * live.scale, live.scale);
+        for (var i = 0; i < layers.length; i++) {
+          ctx.save();
+          ctx.filter = 'blur(' + layers[i].blur + 'px)';
+          ctx.globalAlpha = live.glow * layers[i].alpha * clamp(state.opacity, .28, 1, .92) * (row.sub ? .72 : 1);
+          ctx.fillStyle = color;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = Math.max(6, layers[i].stroke * rowScale);
+          ctx.lineJoin = 'round';
+          drawCanvasText(row.text, 0, 0, row.size, spacing, true);
+          drawCanvasText(row.text, 0, 0, row.size, spacing, false);
+          ctx.restore();
+        }
         ctx.restore();
       }
       ctx.restore();
@@ -1124,6 +1286,74 @@
         window.desktopOverlay.setLyricsLockState(!!locked).catch(function(){});
       }
     }
+    function sendLyricSettingsPatch(patch) {
+      if (!window.desktopOverlay || typeof window.desktopOverlay.updateLyricsSettings !== 'function') return;
+      window.desktopOverlay.updateLyricsSettings(patch || {}).catch(function(){});
+    }
+    // 乐观更新：先本地立即生效，再等主进程回传权威值
+    function applyLocalLyricSettings(patch) {
+      patch = patch || {};
+      if (patch.desktopLyricsSize != null) {
+        state.size = clamp(Number(patch.desktopLyricsSize), .72, 1.55, state.size);
+        baseFontSize = Math.round(58 * clamp(state.size, .72, 1.55, 1));
+      }
+      if (patch.desktopLyricsOpacity != null) {
+        state.opacity = clamp(Number(patch.desktopLyricsOpacity), .28, 1, state.opacity);
+        document.body.style.opacity = state.enabled ? String(state.opacity) : '0';
+      }
+      if (patch.lyricTranslationMode != null) state.translationEnabled = String(patch.lyricTranslationMode) !== 'off';
+      if (patch.lyricTransliterationMode != null) state.transliterationEnabled = String(patch.lyricTransliterationMode) !== 'off';
+      if (refreshLyricRows()) layoutKey = '';
+      fitLyricText(true);
+    }
+    function lyricSteppedValue(value, delta, min, max) {
+      return Math.round(clamp(Number(value) + delta, min, max, value) * 100) / 100;
+    }
+    function bindLyricControl(button, handler) {
+      if (!button) return;
+      button.addEventListener('click', function(evt){
+        evt.preventDefault();
+        evt.stopPropagation();
+        handler();
+      });
+    }
+    function bindLyricControls() {
+      bindLyricControl(fontMinusBtn, function(){
+        var next = lyricSteppedValue(state.size, -LYRIC_SIZE_STEP, .72, 1.55);
+        if (Math.abs(next - state.size) < .001) return;
+        applyLocalLyricSettings({ desktopLyricsSize:next });
+        sendLyricSettingsPatch({ desktopLyricsSize:next });
+      });
+      bindLyricControl(fontPlusBtn, function(){
+        var next = lyricSteppedValue(state.size, LYRIC_SIZE_STEP, .72, 1.55);
+        if (Math.abs(next - state.size) < .001) return;
+        applyLocalLyricSettings({ desktopLyricsSize:next });
+        sendLyricSettingsPatch({ desktopLyricsSize:next });
+      });
+      bindLyricControl(opacityMinusBtn, function(){
+        var next = lyricSteppedValue(state.opacity, -LYRIC_OPACITY_STEP, .28, 1);
+        if (Math.abs(next - state.opacity) < .001) return;
+        applyLocalLyricSettings({ desktopLyricsOpacity:next });
+        sendLyricSettingsPatch({ desktopLyricsOpacity:next });
+      });
+      bindLyricControl(opacityPlusBtn, function(){
+        var next = lyricSteppedValue(state.opacity, LYRIC_OPACITY_STEP, .28, 1);
+        if (Math.abs(next - state.opacity) < .001) return;
+        applyLocalLyricSettings({ desktopLyricsOpacity:next });
+        sendLyricSettingsPatch({ desktopLyricsOpacity:next });
+      });
+      bindLyricControl(translationToggleBtn, function(){
+        var mode = state.translationEnabled !== false ? 'off' : 'multi';
+        applyLocalLyricSettings({ lyricTranslationMode:mode });
+        sendLyricSettingsPatch({ lyricTranslationMode:mode });
+      });
+      bindLyricControl(transliterationToggleBtn, function(){
+        var mode = state.transliterationEnabled === true ? 'off' : 'multi';
+        applyLocalLyricSettings({ lyricTransliterationMode:mode });
+        sendLyricSettingsPatch({ lyricTransliterationMode:mode });
+      });
+    }
+    bindLyricControls();
     function moveDrag(evt) {
       if (dragging && !isLocked() && window.desktopOverlay && window.desktopOverlay.moveLyricsBy) {
         var dx = evt.screenX - dragLast.x;
@@ -1144,6 +1374,8 @@
       dragging = false;
       dragPointerId = null;
       setPointerCapture(false);
+      // 拖完让主进程按窗口实际位置回传 Y 比例，保持主面板滑杆同步
+      sendLyricSettingsPatch({ syncY:true });
     }
     window.addEventListener('pointermove', function(evt){
       if (dragging && evt.buttons != null && (evt.buttons & 1) === 0) {
@@ -1170,6 +1402,7 @@
     window.addEventListener('pointerdown', function(evt){
       if (!pointInStage(evt)) return;
       if (closeLyricsBtn && closeLyricsBtn.contains(evt.target)) return;
+      if (lyricControls && lyricControls.contains(evt.target)) return;
       if (evt.button === 1) {
         evt.preventDefault();
         hideInteractionHint();
