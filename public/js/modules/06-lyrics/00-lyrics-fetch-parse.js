@@ -50,7 +50,7 @@ function lyricEndpointForSong(songOrId) {
 var LYRIC_PLATFORM_STORE_KEY = 'mineradio-lyric-platform-v1';
 var lyricPlatformPreference = readLyricPlatformPreference();
 var lyricPlatformMatchCache = Object.create(null);
-var LYRIC_PLATFORM_KEYS = ['auto', 'netease', 'qq', 'kugou', 'qishui', 'spotify'];
+var LYRIC_PLATFORM_KEYS = ['auto', 'netease', 'qq', 'kugou', 'qishui'];
 
 function normalizeLyricPlatform(value) {
   var raw = String(value == null ? '' : value).trim().toLowerCase();
@@ -77,7 +77,6 @@ function lyricPlatformSearchUrl(provider, query) {
   if (provider === 'qq') return '/api/qq/search?keywords=' + q + '&limit=8';
   if (provider === 'kugou') return '/api/kugou/search?keywords=' + q + '&limit=8';
   if (provider === 'qishui') return '/api/qishui/search?keywords=' + q + '&limit=8';
-  if (provider === 'spotify') return '/api/spotify/search?keywords=' + q + '&limit=8';
   return '/api/search?keywords=' + q + '&limit=10';
 }
 function lyricPlatformQuery(song) {

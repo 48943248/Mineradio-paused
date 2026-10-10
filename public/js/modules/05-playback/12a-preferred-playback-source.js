@@ -8,7 +8,7 @@
 
 var PLAYBACK_SOURCE_PREFERENCE_STORE_KEY = 'mineradio-playback-source-preference';
 var PREFERRED_SOURCE_AUTO = 'auto';
-var PREFERRED_SOURCE_PROVIDER_KEYS = ['netease', 'qq', 'kugou', 'qishui', 'spotify'];
+var PREFERRED_SOURCE_PROVIDER_KEYS = ['netease', 'qq', 'kugou', 'qishui'];
 var PREFERRED_SOURCE_SEARCH_TIMEOUT_MS = 6500;
 var PREFERRED_SOURCE_MATCH_TTL_MS = 5 * 60 * 1000;
 var PREFERRED_SOURCE_FAILURE_TTL_MS = 10 * 60 * 1000;
@@ -35,7 +35,6 @@ function preferredPlaybackProviderTitle(provider) {
   if (provider === 'qq') return 'QQ音乐';
   if (provider === 'kugou') return '酷狗音乐';
   if (provider === 'qishui') return '汽水音乐';
-  if (provider === 'spotify') return 'Spotify';
   return '网易云';
 }
 
@@ -49,7 +48,6 @@ function preferredPlaybackProviderShortLabel(provider) {
   if (provider === 'qq') return 'QQ';
   if (provider === 'kugou') return 'KG';
   if (provider === 'qishui') return 'QS';
-  if (provider === 'spotify') return 'SP';
   return 'NE';
 }
 
@@ -89,7 +87,6 @@ function preferredSourceSearchUrl(provider, query) {
   if (provider === 'qq') return '/api/qq/search?keywords=' + q + '&limit=8';
   if (provider === 'kugou') return '/api/kugou/search?keywords=' + q + '&limit=8';
   if (provider === 'qishui') return '/api/qishui/search?keywords=' + q + '&limit=8';
-  if (provider === 'spotify') return '/api/spotify/search?keywords=' + q + '&limit=8';
   return '/api/search?keywords=' + q + '&limit=10';
 }
 
@@ -392,7 +389,7 @@ function preferredSourceProviderList() {
     { key: 'qq', label: 'QQ', title: 'QQ音乐', desc: '所有歌曲优先用 QQ 音乐播放' },
     { key: 'kugou', label: 'KG', title: '酷狗音乐', desc: '所有歌曲优先用酷狗音乐播放' },
     { key: 'qishui', label: 'QS', title: '汽水音乐', desc: '仅匹配源，播放可能自动换源' },
-    { key: 'spotify', label: 'SP', title: 'Spotify', desc: '仅匹配源，播放可能自动换源' }
+
   ];
 }
 
