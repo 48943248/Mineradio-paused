@@ -1056,9 +1056,10 @@ function renderHomePlatformRecommendations() {
       var cardLabel = feedConfig.cardLabel;
       var readyText = feedConfig.readyText;
       if (source === 'qq' && feedState.fallback) {
-        sectionTitle = '官方热歌榜';
-        cardLabel = 'QQ 音乐热歌榜';
-        readyText = 'QQ 个性化推荐暂不可用，当前显示 QQ 音乐官方热歌榜';
+        var qqRankName = feedState.toplistName || '官方榜单';
+        sectionTitle = qqRankName;
+        cardLabel = 'QQ 音乐' + qqRankName;
+        readyText = 'QQ 个性化推荐暂不可用，当前显示 QQ 音乐' + qqRankName;
       } else if (source === 'qishui' && feedState.fallback) {
         sectionTitle = '你的音乐';
         cardLabel = '汽水喜欢 / 最近播放';
@@ -1137,6 +1138,7 @@ async function loadHomePlatformFeedRecommendations(source, force) {
     feedState.source = data && data.source ? String(data.source) : '';
     feedState.fallback = !!(data && data.fallback);
     feedState.provenance = data && data.provenance ? String(data.provenance) : '';
+    feedState.toplistName = data && data.toplistName ? String(data.toplistName) : '';
     feedState.loaded = true;
   } catch (error) {
     console.warn('[HomePlatformFeed:' + source + ']', error);
@@ -1219,7 +1221,7 @@ function bindHomePlatformRecommendationControls() {
     closeHomePlatformRecommendations();
     if (kind === 'netease-playlist' && typeof openHomePlaylist === 'function') openHomePlaylist(index);
     else if (kind === 'netease-song' && typeof playHomeSong === 'function') playHomeSong(index);
-    else if (/^(qishui|kugou|spotify)-song$/.test(kind)) playHomePlatformFeedSong(kind.replace(/-song$/, ''), index);
+    else if (/^(qishui|kugou|spotify|qq)-song$/.test(kind)) playHomePlatformFeedSong(kind.replace(/-song$/, ''), index);
   });
   if (list) list.addEventListener('scroll', scheduleHomePlatformDailyWindowRender, { passive: true });
   window.addEventListener('resize', scheduleHomePlatformDailyWindowRender, { passive: true });

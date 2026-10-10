@@ -3580,6 +3580,15 @@ function truthyQQPlaybackHint(value) {
 
 // 二改：QQ 音乐「平台推荐」。优先取个性化的每日推荐，不可用时回退到官方热歌榜，
 // 最后再用 QQ 搜索结果的详情补全函数把 mid 映射成与 QQ 搜索一致的歌曲结构。
+// QQ 官方榜单（无需登录即可读取）。个性化「每日推荐」接口（smartbox）对第三方返回
+// reqCode=500003，所以推荐内容按榜单轮流提供，保证面板始终有可用内容。
+const QQ_RECOMMEND_TOPLISTS = [
+  { id: 26, name: '热歌榜' },
+  { id: 27, name: '新歌榜' },
+  { id: 62, name: '飙升榜' },
+  { id: 4, name: '原创榜' },
+];
+let qqRecommendToplistCursor = 0;
 async function qqRecommendRawMids(limit) {
   const num = Math.max(4, Math.min(30, Number(limit) || 12));
   try {
@@ -3598,6 +3607,11 @@ async function qqRecommendRawMids(limit) {
     }, { cookie: true });
     const data = json && json.req && json.req.data;
     const list = (data && (data.songlist || data.v_song || data.list || data.songs)) || [];
+    console.log('[QQRecommend] smartbox code=%s reqCode=%s dataKeys=[%s] listLen=%d',
+      json && json.code,
+      json && json.req && json.req.code,
+      data ? Object.keys(data).join(',') : '',
+      Array.isArray(list) ? list.length : -1);
     const mids = [];
     (Array.isArray(list) ? list : []).forEach((item) => {
       const song = (item && (item.track_info || item.trackInfo || item.song_info || item.songInfo)) || item || {};
@@ -3608,26 +3622,38 @@ async function qqRecommendRawMids(limit) {
   } catch (err) {
     console.warn('[QQRecommend] smartbox failed:', err.message);
   }
-  try {
-    const body = await qqGetJSON('https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg', {
-      topid: 26,
-      song_begin: 0,
-      song_num: num,
-      format: 'json',
-      tpl: 3,
-      page: 'detail',
-      type: 'top',
-      platform: 'yqq.json',
-      needNewCode: 1,
-      inCharset: 'utf8',
-      outCharset: 'utf-8',
-      notice: 0,
-    }, { headers: { Referer: 'https://y.qq.com/n/yqq/toplist/26.html' } });
-    const list = (body && body.songlist) || [];
-    const mids = list.map((row) => row && row.data && (row.data.songmid || row.data.mid)).filter(Boolean);
-    if (mids.length) return { mids: mids.slice(0, num).map(String), mode: 'toplist', source: 'qq-toplist-26' };
-  } catch (err) {
-    console.warn('[QQRecommend] toplist failed:', err.message);
+  // 二改：个性化推荐对第三方不可用，按榜单轮流兜底；每次刷新会换一个榜单。
+  for (let attempt = 0; attempt < QQ_RECOMMEND_TOPLISTS.length; attempt += 1) {
+    const toplist = QQ_RECOMMEND_TOPLISTS[qqRecommendToplistCursor % QQ_RECOMMEND_TOPLISTS.length];
+    qqRecommendToplistCursor += 1;
+    try {
+      const body = await qqGetJSON('https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg', {
+        topid: toplist.id,
+        song_begin: 0,
+        song_num: num,
+        format: 'json',
+        tpl: 3,
+        page: 'detail',
+        type: 'top',
+        platform: 'yqq.json',
+        needNewCode: 1,
+        inCharset: 'utf8',
+        outCharset: 'utf-8',
+        notice: 0,
+      }, { headers: { Referer: 'https://y.qq.com/n/yqq/toplist/' + toplist.id + '.html' } });
+      const list = (body && body.songlist) || [];
+      const mids = list.map((row) => row && row.data && (row.data.songmid || row.data.mid)).filter(Boolean);
+      if (mids.length) {
+        return {
+          mids: mids.slice(0, num).map(String),
+          mode: 'toplist',
+          source: 'qq-toplist-' + toplist.id,
+          toplistName: toplist.name,
+        };
+      }
+    } catch (err) {
+      console.warn('[QQRecommend] toplist %s failed: %s', toplist.name, err.message);
+    }
   }
   return { mids: [], mode: '', source: '' };
 }
@@ -3654,7 +3680,14 @@ async function handleQQRecommendations(limit) {
     seen.add(key);
     return true;
   });
-  return { provider: 'qq', songs, mode: picked.mode, source: picked.source, fallback: picked.mode === 'toplist' };
+  return {
+    provider: 'qq',
+    songs,
+    mode: picked.mode,
+    source: picked.source,
+    toplistName: picked.toplistName || '',
+    fallback: picked.mode === 'toplist',
+  };
 }
 
 function qqPlaybackMemberHints(hints) {

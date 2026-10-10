@@ -17,11 +17,26 @@ function testQQRecommendationEndpoint() {
   // 个性化推荐（musicu smartbox）优先
   assert.ok(serverText.indexOf('music.smartboxCgi.MusicSmartBoxSvr') >= 0, '优先取 QQ 个性化推荐');
   assert.ok(serverText.indexOf('GetRecommendSongList') >= 0);
-  // 官方热歌榜兜底
-  assert.ok(serverText.indexOf('fcg_v8_toplist_cp.fcg') >= 0, '个性化推荐不可用时回退到官方榜单');
-  assert.ok(serverText.indexOf("topid: 26") >= 0, '兜底使用 QQ 热歌榜');
+  // 个性化对第三方返回 500003，改为多榜单轮换兜底
+  assert.ok(serverText.indexOf('const QQ_RECOMMEND_TOPLISTS = [') >= 0, '要有榜单列表');
+  ['热歌榜', '新歌榜', '飙升榜', '原创榜'].forEach((name) => {
+    assert.ok(serverText.indexOf("name: '" + name + "'") >= 0, '缺少榜单：' + name);
+  });
+  assert.ok(serverText.indexOf('qqRecommendToplistCursor') >= 0, '榜单要轮流切换，而不是固定一个');
+  assert.ok(serverText.indexOf('fcg_v8_toplist_cp.fcg') >= 0, '兜底使用官方榜单接口');
+  assert.ok(serverText.indexOf('toplistName') >= 0, '要把榜单名回传给前端显示');
   // 复用 QQ 搜索的详情补全，保证字段结构和搜索一致
   assert.ok(serverText.indexOf('await qqSongDetail(mid, { mid })') >= 0, '推荐歌曲要复用 qqSongDetail 补全');
+}
+
+function testQQRecommendCardsAreClickable() {
+  // 回归：点击分派的正则曾漏掉 qq，导致点 QQ 推荐歌曲没有任何反应。
+  assert.ok(
+    dashboardText.indexOf('/^(qishui|kugou|spotify|qq)-song$/.test(kind)') >= 0,
+    'QQ 推荐歌曲的点击分派必须被支持'
+  );
+  assert.ok(dashboardText.indexOf('feedState.toplistName') >= 0, '面板要显示实际榜单名');
+  assert.ok(dashboardText.indexOf("feedState.toplistName || '官方榜单'") >= 0);
 }
 
 function testDashboardWiring() {
@@ -29,7 +44,7 @@ function testDashboardWiring() {
   assert.ok(dashboardText.indexOf("qq: { loading: false, loaded: false, songs: []") >= 0, '要有 QQ 的 feed 状态');
   assert.ok(dashboardText.indexOf("endpoint: '/api/qq/recommendations?limit=12'") >= 0, 'QQ feed 要指向新端点');
   assert.ok(dashboardText.indexOf("source === 'qq' && feedState.fallback") >= 0, 'QQ 走榜单兜底时文案要说明来源');
-  assert.ok(dashboardText.indexOf("sectionTitle = '官方热歌榜'") >= 0);
+  assert.ok(dashboardText.indexOf('sectionTitle = qqRankName;') >= 0);
   // 三个平台的标签页都在
   ['netease', 'qishui', 'qq', 'kugou'].forEach((source) => {
     assert.ok(indexHtml.indexOf('data-home-recommend-source="' + source + '"') >= 0, source + ' 标签页缺失');
@@ -48,6 +63,7 @@ function testQQFunctionsStillIntact() {
 }
 
 testQQRecommendationEndpoint();
+testQQRecommendCardsAreClickable();
 testDashboardWiring();
 testQQFunctionsStillIntact();
 console.log('OK platform-recommend-sources');
