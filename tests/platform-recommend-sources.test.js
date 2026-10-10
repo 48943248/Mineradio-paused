@@ -39,7 +39,15 @@ function testQQRecommendCardsAreClickable() {
   assert.ok(dashboardText.indexOf('qqFeed: { loading: false') >= 0, '要有 QQ 专用 feed 状态');
   assert.ok(dashboardText.indexOf('async function loadHomePlatformQQRecommendations(') >= 0);
   assert.ok(dashboardText.indexOf("apiJson('/api/qq/recommendations?limit=30") >= 0, '每日推荐要取 30 首');
-  assert.ok(dashboardText.indexOf("'/api/qq/user/playlists?t='") >= 0, '推荐歌单取该账号的歌单');
+  // 推荐歌单必须是「平台个性化推荐」，不是账号自建歌单
+  assert.ok(dashboardText.indexOf("apiJson('/api/qq/recommend/playlists?limit=6") >= 0,
+    '推荐歌单要取平台推荐接口');
+  assert.strictEqual(dashboardText.indexOf('/api/qq/user/playlists'), -1,
+    '不应把账号自建歌单当作推荐歌单');
+  assert.ok(serverText.indexOf('music.playlist.PlaylistSquare') >= 0, '服务端要请求 QQ 的推荐歌单接口');
+  assert.ok(serverText.indexOf('GetRecommendFeed') >= 0);
+  assert.ok(serverText.indexOf('function mapQQFeedPlaylist(') >= 0, '推荐歌单字段是三层嵌套，要专用映射');
+  assert.ok(serverText.indexOf("pn === '/api/qq/recommend/playlists'") >= 0, '要暴露推荐歌单端点');
   assert.ok(dashboardText.indexOf("'<section><h3>推荐歌单</h3>") >= 0, '要有「推荐歌单」分区');
   assert.ok(dashboardText.indexOf('每日推荐<span> · ') >= 0, '要有「每日推荐」分区');
   assert.ok(dashboardText.indexOf('.slice(0, 30)') >= 0, '歌曲条数上限 30');

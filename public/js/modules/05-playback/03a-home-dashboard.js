@@ -1054,7 +1054,7 @@ function renderHomePlatformRecommendations() {
     var qqSections = [];
     if (qqFeed.playlists && qqFeed.playlists.length) {
       qqSections.push('<section><h3>推荐歌单</h3><div class="home-platform-recommend-grid">' + qqFeed.playlists.map(function (item, index) {
-        return homePlatformRecommendationCard('qq-playlist', index, item, 'QQ 音乐歌单');
+        return homePlatformRecommendationCard('qq-playlist', index, item, 'QQ 音乐推荐歌单');
       }).join('') + '</div></section>');
     }
     if (qqFeed.songs && qqFeed.songs.length) {
@@ -1153,7 +1153,7 @@ async function loadHomePlatformQishuiRecommendations(force) {
   return loadHomePlatformFeedRecommendations('qishui', force);
 }
 
-// 二改：QQ 每日推荐 30 首 + 推荐歌单（登录后取自己的歌单，未登录只出歌曲）。
+// 二改：QQ 每日推荐 30 首 + 平台个性化推荐歌单（与网易云的「推荐歌单」对齐）。
 async function loadHomePlatformQQRecommendations(force) {
   var state = homePlatformRecommendationState.qqFeed;
   if (!state || state.loading) return;
@@ -1164,7 +1164,7 @@ async function loadHomePlatformQQRecommendations(force) {
   try {
     var results = await Promise.all([
       apiJson('/api/qq/recommendations?limit=30&t=' + Date.now(), { timeoutMs: 22000 }),
-      apiJson('/api/qq/user/playlists?t=' + Date.now(), { timeoutMs: 15000 }).catch(function () { return null; }),
+      apiJson('/api/qq/recommend/playlists?limit=6&t=' + Date.now(), { timeoutMs: 18000 }).catch(function () { return null; }),
     ]);
     var feed = results[0] || {};
     var rawSongs = feed.songs;

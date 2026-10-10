@@ -3645,6 +3645,43 @@ async function qqRecommendRawMids(limit) {
   return { mids: [], mode: '', source: '' };
 }
 
+// 二改：QQ「推荐歌单」= 平台个性化推荐（不是账号自建歌单）。
+// 接口：music.playlist.PlaylistSquare / GetRecommendFeed，返回在 data.List，
+// 每项形如 { Playlist: { basic: { tid, title, cover, creator, song_cnt, play_cnt } } }。
+function mapQQFeedPlaylist(item) {
+  const basic = (item && item.Playlist && item.Playlist.basic) || (item && item.basic) || item || {};
+  const cover = (basic.cover && (basic.cover.medium_url || basic.cover.default_url || basic.cover.small_url))
+    || basic.cover_url || basic.picurl || '';
+  return {
+    id: String(basic.tid || basic.dissid || basic.id || ''),
+    name: String(basic.title || basic.name || ''),
+    cover: String(cover || ''),
+    trackCount: Number(basic.song_cnt || basic.songCount || 0) || 0,
+    playCount: Number(basic.play_cnt || basic.playCount || 0) || 0,
+    creator: String((basic.creator && basic.creator.nick) || basic.creator_name || ''),
+  };
+}
+
+async function handleQQRecommendPlaylists(limit) {
+  const size = Math.max(4, Math.min(20, Number(limit) || 6));
+  const moduleName = 'music.playlist.PlaylistSquare';
+  const json = await qqMusicRequest({
+    comm: { ct: 24, cv: 0, uin: qqCookieUin() || '0' },
+    [moduleName]: {
+      method: 'GetRecommendFeed',
+      module: moduleName,
+      param: { From: 0, Size: size },
+    },
+  }, { cookie: true });
+  const node = json && json[moduleName];
+  const data = node && node.data;
+  const list = (data && (data.List || data.list)) || [];
+  const playlists = (Array.isArray(list) ? list : []).map(mapQQFeedPlaylist).filter((item) => item.id && item.name);
+  console.log('[QQRecommendPlaylist] code=%s nodeCode=%s listLen=%d mapped=%d',
+    json && json.code, node && node.code, Array.isArray(list) ? list.length : -1, playlists.length);
+  return { provider: 'qq', playlists: playlists.slice(0, size) };
+}
+
 async function handleQQRecommendations(limit) {
   const picked = await qqRecommendRawMids(limit);
   if (!picked.mids.length) {
@@ -5161,6 +5198,17 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[QQSearch]', err);
       sendJSON(res, { provider: 'qq', error: err.message, songs: [] }, 500);
+    }
+    return;
+  }
+
+  if (pn === '/api/qq/recommend/playlists') {
+    try {
+      const limit = Math.max(4, Math.min(20, parseInt(url.searchParams.get('limit') || '6', 10) || 6));
+      sendJSON(res, await handleQQRecommendPlaylists(limit));
+    } catch (err) {
+      console.error('[QQRecommendPlaylist]', err);
+      sendJSON(res, { provider: 'qq', error: err.message, playlists: [] }, 500);
     }
     return;
   }
