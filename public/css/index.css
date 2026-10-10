@@ -18398,10 +18398,15 @@ body.panel-reordering .mini-queue-item.is-reordering {
 }
 
 .home-platform-recommend-tabs {
+  position: relative;
+  z-index: 2;
   display: flex;
+  flex: 0 0 auto;
   gap: 7px;
   margin-top: 18px;
+  padding-bottom: 2px;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none
 }
 
@@ -18430,10 +18435,14 @@ body.panel-reordering .mini-queue-item.is-reordering {
 }
 
 .home-platform-recommend-status {
+  position: relative;
+  z-index: 1;
   min-height: 17px;
   margin-top: 13px;
   color: rgba(255, 255, 255, .45);
-  font-size: 10.5px
+  font-size: 10.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere
 }
 
 .home-platform-recommend-status.is-error {

@@ -46,9 +46,19 @@ function testDashboardWiring() {
   assert.ok(dashboardText.indexOf("source === 'qq' && feedState.fallback") >= 0, 'QQ 走榜单兜底时文案要说明来源');
   assert.ok(dashboardText.indexOf('sectionTitle = qqRankName;') >= 0);
   // 三个平台的标签页都在
-  ['netease', 'qishui', 'qq', 'kugou'].forEach((source) => {
+  ['netease', 'qishui', 'qq', 'kugou', 'spotify'].forEach((source) => {
     assert.ok(indexHtml.indexOf('data-home-recommend-source="' + source + '"') >= 0, source + ' 标签页缺失');
   });
+  // 二改：Spotify 的推荐配置也要在（上游移除时连标签页一起删了）
+  assert.ok(dashboardText.indexOf("endpoint: '/api/spotify/recommendations?limit=12'") >= 0, 'Spotify feed 要指向推荐端点');
+  assert.ok(dashboardText.indexOf('spotify: { loading: false') >= 0, '要有 Spotify 的 feed 状态');
+  // 布局回归：状态文字曾把标签按钮挡住，标签行必须压在状态之上且不被压缩。
+  const cssText = fs.readFileSync(path.join(appRoot, 'public', 'css', 'index.css'), 'utf8');
+  const tabsRule = (cssText.match(/\.home-platform-recommend-tabs\s*\{[^}]*\}/) || [''])[0];
+  assert.ok(/z-index:\s*2/.test(tabsRule), '标签行要压在状态文字之上，避免被遮挡');
+  assert.ok(/flex:\s*0 0 auto/.test(tabsRule), '标签行不能被 flex 压缩');
+  const statusRule = (cssText.match(/\.home-platform-recommend-status\s*\{[^}]*\}/) || [''])[0];
+  assert.ok(/overflow-wrap:\s*anywhere/.test(statusRule), '长状态文字要能换行而不是溢出遮挡');
   // 酷狗 / 汽水的既有接入保持可用（需要登录态时由前端提示）
   assert.ok(serverText.indexOf("pn === '/api/kugou/recommendations'") >= 0, '酷狗推荐端点应保留');
   assert.ok(serverText.indexOf("pn === '/api/qishui/feed'") >= 0, '汽水推荐端点应保留');
