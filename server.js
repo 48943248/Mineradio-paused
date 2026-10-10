@@ -1227,9 +1227,11 @@ const NETEASE_SOURCE_MATCH_LOOKUP_BUDGET_MS = 4800;
 const NETEASE_SONG_URL_TOTAL_BUDGET_MS = 12000;
 const QQ_QUALITY_CANDIDATE_TEMPLATES = [
   { prefix: 'AI00', ext: '.flac', level: 'jymaster', label: '臻品母带' },
-  { prefix: 'Q000', ext: '.flac', level: 'spatial', label: '臻品全景声' },
   { prefix: 'RS01', ext: '.flac', level: 'hires', label: 'Hi-Res FLAC' },
   { prefix: 'F000', ext: '.flac', level: 'lossless', label: '无损 FLAC' },
+  // 二改：臻品全景声是「环绕声格式」，并不等于更高音质。原先排在母带之后，
+  // 导致请求母带时容易落到全景声，出现"实际播放档位与预期不一致"。这里按音质档位排序。
+  { prefix: 'Q000', ext: '.flac', level: 'spatial', label: '臻品全景声' },
   { prefix: 'M800', ext: '.mp3', level: 'exhigh', label: '320k MP3' },
   { prefix: 'M500', ext: '.mp3', level: 'standard', label: '128k MP3' },
   { prefix: 'C400', ext: '.m4a', level: 'aac', label: 'AAC/M4A' },
@@ -3888,6 +3890,77 @@ async function handleQQLyric(mid, id) {
       source = 'qq-legacy';
     } catch (e) {
       console.warn('[QQLyric] legacy failed:', e.message);
+    }
+  }
+
+  // 二改：QQ 的翻译(trans) 与音译(roma) 只有在显式带上 qrc/trans/roma/crypt 参数时才会返回，
+  // 默认参数只会给主歌词。这里在主歌词拿到后（或翻译/音译缺失时）再补一次带参数的请求。
+  if (!transText || !romaText || !qrcText) {
+    try {
+      const richParam = {};
+      if (songMID) richParam.songMID = songMID;
+      if (songID) richParam.songID = songID;
+      richParam.crypt = 1;
+      richParam.qrc = 1;
+      richParam.trans = 1;
+      richParam.roma = 1;
+      richParam.lrc_t = 0;
+      richParam.interval = 0;
+      richParam.trans_t = 0;
+      richParam.type = 0;
+      const richJSON = await qqMusicRequest({
+        comm: { ct: 24, cv: 0 },
+        lyric: {
+          module: 'music.musichallSong.PlayLyricInfo',
+          method: 'GetPlayLyricInfo',
+          param: richParam,
+        },
+      }, { cookie: true });
+      const richNode = richJSON && richJSON.lyric;
+      const richData = richNode && richNode.data;
+      if (richData) {
+        const richLyric = decodeQQLyricText(richData.lyric);
+        const richTrans = decodeQQLyricText(richData.trans);
+        const richRoma = decodeQQLyricText(richData.roma);
+        const richQrc = decodeQQLyricText(richData.qrc);
+        if (!lyricText && richLyric) lyricText = richLyric;
+        if (!transText && richTrans) transText = richTrans;
+        if (!romaText && richRoma) romaText = richRoma;
+        if (!qrcText && richQrc) qrcText = richQrc;
+        if (richTrans || richRoma) {
+          source = 'qq-musicu-rich';
+          console.log('[QQLyric] rich mid=%s trans=%d roma=%d', songMID || songID, (richTrans || '').length, (richRoma || '').length);
+        }
+      }
+    } catch (e) {
+      console.warn('[QQLyric] rich failed:', e.message);
+    }
+  }
+
+  // 翻译仍然缺失时，用旧接口兜底（旧接口的 trans 字段）。
+  if (!transText && songMID) {
+    try {
+      const body = await qqGetJSON('https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg', {
+        songmid: songMID,
+        songtype: '0',
+        format: 'json',
+        nobase64: '1',
+        g_tk: '5381',
+        loginUin: qqCookieUin() || '0',
+        hostUin: '0',
+        inCharset: 'utf8',
+        outCharset: 'utf-8',
+        notice: '0',
+        platform: 'yqq.json',
+        needNewCode: '0',
+      }, { headers: { Referer: 'https://y.qq.com/portal/player.html' } });
+      const legacyTrans = decodeQQLyricText(body && (body.trans || body.tlyric));
+      if (legacyTrans) {
+        transText = legacyTrans;
+        if (source === 'qq-empty' || !source) source = 'qq-legacy-trans';
+      }
+    } catch (e) {
+      console.warn('[QQLyric] legacy trans failed:', e.message);
     }
   }
 

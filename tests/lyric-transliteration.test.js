@@ -154,10 +154,27 @@ function testServerLyricLrcGuard() {
   assert.ok(serverText.indexOf('lyricTextLooksStructured(lrc)') >= 0, '结构化 lrc 不应被当作可用主歌词');
 }
 
+function testCrossPlatformLyricTopUp() {
+  // 所选平台（例如 QQ 音乐）本身没有翻译/音译时，要去网易云补齐——包括音译。
+  assert.ok(fetchParseText.indexOf("attachLyricTranslations(mergedLines, transliterationPayloadLines, 'transliteration', 'netease-romalrc')") >= 0,
+    '跨平台兜底要把音译贴到当前歌词行上');
+  assert.ok(fetchParseText.indexOf('transliterationLines: cloneLyricLines(transliterationPayload.lines)') >= 0,
+    '兜底缓存要带上音译行，避免重复请求');
+  assert.ok(fetchParseText.indexOf('var wantsTransliteration = typeof normalizeLyricTransliterationMode') >= 0,
+    '只有用户开启音译时才去补音译');
+  assert.ok(fetchParseText.indexOf('function scheduleLyricCapabilityNotice(') >= 0,
+    '兜底也补不上时应自动提示');
+  assert.ok(fetchParseText.indexOf('showSourceFallbackNotice(') >= 0,
+    '提示复用现有的卡片式提示组件');
+  assert.ok(fetchParseText.indexOf('lyricCapabilityNoticeCache[noticeKey]') >= 0,
+    '同一平台同一种能力只提示一次，避免每首歌打扰');
+}
+
 testTransliterationAliases();
 testTransliterationPayload();
 testAttachToPrimaryLines();
 testLyricPlatformPreference();
 testUiWiringPresent();
 testServerLyricLrcGuard();
+testCrossPlatformLyricTopUp();
 console.log('OK lyric-transliteration');

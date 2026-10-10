@@ -73,11 +73,21 @@ function testServerQualityChain() {
   const chain = sandbox.from('jymaster', sandbox.T).map(item => item.level).join(',');
   assert.strictEqual(
     chain,
-    'jymaster,spatial,hires,lossless,exhigh,standard,aac',
-    'QQ 会员音质必须构成从母带向下的完整降级链'
+    'jymaster,hires,lossless,spatial,exhigh,standard,aac',
+    'QQ 会员音质必须构成从母带向下的完整降级链（全景声是环绕声格式，排在无损之后）'
   );
   assert.strictEqual(sandbox.from('spatial', sandbox.T)[0].prefix, 'Q000');
   assert.strictEqual(sandbox.from('jymaster', sandbox.T)[0].prefix, 'AI00');
+  assert.strictEqual(
+    sandbox.from('jymaster', sandbox.T)[1].prefix,
+    'RS01',
+    '请求母带时缺权限应退到 Hi-Res，而不是直接掉到全景声'
+  );
+  assert.strictEqual(
+    sandbox.from('jymaster', sandbox.T).map(item => item.prefix).indexOf('Q000'),
+    3,
+    '全景声在母带降级链中的位置应低于无损'
+  );
   assert.strictEqual(
     sandbox.from('standard', sandbox.T).map(item => item.prefix).join(','),
     'M500,C400',
@@ -85,8 +95,8 @@ function testServerQualityChain() {
   );
   assert.strictEqual(
     sandbox.from('lossless', sandbox.T).map(item => item.prefix).join(','),
-    'F000,M800,M500,C400',
-    '无损档位的原有降级行为不应改变'
+    'F000,Q000,M800,M500,C400',
+    '无损档位之后的降级顺序（含全景声）'
   );
 }
 

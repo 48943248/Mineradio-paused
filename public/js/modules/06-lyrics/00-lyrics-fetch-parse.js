@@ -203,8 +203,43 @@ function applyFetchedLyricResponse(song, token, response, options) {
   setOriginalLyricsState(state.lines, state.hasNativeKaraoke, state.timingSource, state.translationLines, state.translationSource);
   applyPreferredLyricsForCurrent(true);
   scheduleNeteaseLyricTranslationFallback(song, token, state);
+  scheduleLyricCapabilityNotice(song, token, state);
   if (state.usableLyric && options.persist !== false) writePersistentLyricCache(song, mergedResponse);
   return state;
+}
+
+// 二改：当前歌词平台没有翻译/音译、且跨平台补齐也失败时，自动弹一次卡片提示
+// （同一个平台 + 同一种能力只提示一次，避免每首歌都打扰）。
+var lyricCapabilityNoticeCache = {};
+function scheduleLyricCapabilityNotice(song, token, state) {
+  if (!state || !state.usableLyric) return;
+  var wantsTranslation = typeof normalizeLyricTranslationMode === 'function'
+    && normalizeLyricTranslationMode(fx && fx.lyricTranslationMode) !== 'off';
+  var wantsTransliteration = typeof normalizeLyricTransliterationMode === 'function'
+    && normalizeLyricTransliterationMode(fx && fx.lyricTransliterationMode) !== 'off';
+  if (!wantsTranslation && !wantsTransliteration) return;
+  setTimeout(function () {
+    if (token !== trackSwitchToken) return;
+    var lines = (typeof lyricsLines !== 'undefined' && Array.isArray(lyricsLines)) ? lyricsLines : [];
+    if (!lines.length) return;
+    var hasTranslation = lines.some(function (line) { return line && line.translation; });
+    var hasTransliteration = lines.some(function (line) { return line && line.transliteration; });
+    var missing = [];
+    if (wantsTranslation && !hasTranslation) missing.push('翻译');
+    if (wantsTransliteration && !hasTransliteration) missing.push('音译');
+    if (!missing.length) return;
+    var platform = normalizeLyricPlatform(lyricPlatformPreference);
+    var provider = platform === 'auto' ? songProviderKey(song) : platform;
+    var noticeKey = provider + '|' + missing.join('+');
+    if (lyricCapabilityNoticeCache[noticeKey]) return;
+    lyricCapabilityNoticeCache[noticeKey] = 1;
+    if (typeof showSourceFallbackNotice === 'function') {
+      showSourceFallbackNotice(
+        missing.join(' / ') + '暂不可用',
+        lyricPlatformLabel(provider) + '没有这首歌的' + missing.join('和') + '，其它平台也没补上。'
+      );
+    }
+  }, 5200);
 }
 
 function refreshPersistentLyricCache(song) {
@@ -236,8 +271,13 @@ function shouldFetchNeteaseLyricTranslationFallback(song, state) {
   if (!song || !state || !state.usableLyric) return false;
   if (song.type === 'local' || song.source === 'local' || song.localUrl || song.type === 'podcast') return false;
   if (songProviderKey(song) === 'netease') return false;
-  if (state.translationLines && state.translationLines.length) return false;
   if (!String(song.name || song.title || '').trim()) return false;
+  var hasTranslation = !!(state.translationLines && state.translationLines.length);
+  var hasTransliteration = !!(state.transliterationLines && state.transliterationLines.length);
+  var wantsTransliteration = typeof normalizeLyricTransliterationMode === 'function'
+    && normalizeLyricTransliterationMode(fx && fx.lyricTransliterationMode) !== 'off';
+  // 缺译文一律去补（原版行为）；音译只在用户开启音译时才补，避免无谓请求。
+  if (hasTranslation && (!wantsTransliteration || hasTransliteration)) return false;
   var key = lyricTranslationFallbackKey(song);
   var missedAt = lyricTranslationFallbackMissCache[key] || 0;
   return !missedAt || Date.now() - missedAt > 10 * 60 * 1000;
@@ -272,20 +312,32 @@ async function findNeteaseLyricFallbackCandidate(song) {
   return best && best.id && bestScore >= 28 ? best : null;
 }
 function mergeNeteaseFallbackTranslationsIntoCurrent(song, token, payload, cacheKey) {
-  if (!payload || !payload.lines || !payload.lines.length) return false;
-  if (token !== trackSwitchToken) return false;
+  if (!payload || token !== trackSwitchToken) return false;
+  var translationPayloadLines = Array.isArray(payload.lines) ? payload.lines : [];
+  var transliterationPayloadLines = Array.isArray(payload.transliterationLines) ? payload.transliterationLines : [];
+  if (!translationPayloadLines.length && !transliterationPayloadLines.length) return false;
   var currentSong = typeof currentLyricSong === 'function' ? currentLyricSong() : null;
   if (lyricTranslationFallbackKey(currentSong) !== cacheKey) return false;
-  if (originalLyricsState && originalLyricsState.translationLines && originalLyricsState.translationLines.length) return false;
-  var mergedLines = attachLyricTranslations(originalLyricsState.lines || [], payload.lines);
-  var attached = mergedLines.some(function (line) { return line && line.translation; });
-  if (!attached) return false;
+  var mergedLines = (originalLyricsState && originalLyricsState.lines) || [];
+  if (!mergedLines.length) return false;
+  if (translationPayloadLines.length) {
+    mergedLines = attachLyricTranslations(mergedLines, translationPayloadLines);
+  }
+  if (transliterationPayloadLines.length) {
+    mergedLines = attachLyricTranslations(mergedLines, transliterationPayloadLines, 'transliteration', 'netease-romalrc');
+  }
+  var attachedTranslation = mergedLines.some(function (line) { return line && line.translation; });
+  var attachedTransliteration = mergedLines.some(function (line) { return line && line.transliteration; });
+  if (!attachedTranslation && !attachedTransliteration) return false;
+  var sourceTags = [];
+  if (attachedTranslation) sourceTags.push('netease-fallback+' + (payload.source || 'tlyric'));
+  if (attachedTransliteration) sourceTags.push('netease-fallback+' + (payload.transliterationSource || 'romalrc'));
   setOriginalLyricsState(
     mergedLines,
     originalLyricsState.hasNativeKaraoke,
     originalLyricsState.timingSource,
-    payload.lines,
-    'netease-fallback+' + (payload.source || 'tlyric')
+    translationPayloadLines.length ? translationPayloadLines : (originalLyricsState.translationLines || []),
+    sourceTags.join('+')
   );
   applyPreferredLyricsForCurrent(true);
   return true;
@@ -296,17 +348,23 @@ async function fetchNeteaseLyricTranslationFallback(song, token, cacheKey) {
   if (cached) return mergeNeteaseFallbackTranslationsIntoCurrent(song, token, cached, cacheKey);
   try {
     var candidate = await findNeteaseLyricFallbackCandidate(song);
-    if (token !== trackSwitchToken || !candidate || !candidate.id) return false;
+    if (token !== trackSwitchToken || !candidate || !candidate.id) {
+      lyricTranslationFallbackMissCache[cacheKey] = Date.now();
+      return false;
+    }
     var response = await apiJson('/api/lyric?id=' + encodeURIComponent(candidate.id), { timeoutMs: 5200 });
     if (token !== trackSwitchToken) return false;
     var translationPayload = buildLyricTranslationPayload(response || {});
-    if (!translationPayload.lines.length) {
+    var transliterationPayload = buildLyricTransliterationPayload(response || {});
+    if (!translationPayload.lines.length && !transliterationPayload.lines.length) {
       lyricTranslationFallbackMissCache[cacheKey] = Date.now();
       return false;
     }
     cached = {
       lines: cloneLyricLines(translationPayload.lines),
       source: translationPayload.source,
+      transliterationLines: cloneLyricLines(transliterationPayload.lines),
+      transliterationSource: transliterationPayload.source,
       candidateId: candidate.id,
       cachedAt: Date.now()
     };
