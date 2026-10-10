@@ -18696,3 +18696,24 @@ body.desktop-shell.desktop-wallpaper-mode.diy-mode #bottom-bar.stage-mode {
     width: calc(100vw - var(--desktop-safe-left) - var(--desktop-safe-right) - 24px);
   }
 }
+
+/* 二改：推荐歌单 / 推荐内容的「刷新」按钮 */
+.home-platform-recommend-refresh-btn {
+  margin-left: 8px;
+  min-height: 22px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  color: rgba(255, 255, 255, .7);
+  font: 700 10px inherit;
+  letter-spacing: 0;
+  cursor: pointer;
+  vertical-align: middle
+}
+
+.home-platform-recommend-refresh-btn:hover {
+  color: #fff;
+  border-color: rgba(var(--fc-accent-rgb), .5);
+  background: rgba(var(--fc-accent-rgb), .14)
+}

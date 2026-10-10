@@ -48,7 +48,7 @@ function testQQRecommendCardsAreClickable() {
   assert.ok(serverText.indexOf('GetRecommendFeed') >= 0);
   assert.ok(serverText.indexOf('function mapQQFeedPlaylist(') >= 0, '推荐歌单字段是三层嵌套，要专用映射');
   assert.ok(serverText.indexOf("pn === '/api/qq/recommend/playlists'") >= 0, '要暴露推荐歌单端点');
-  assert.ok(dashboardText.indexOf("'<section><h3>推荐歌单</h3>") >= 0, '要有「推荐歌单」分区');
+  assert.ok(dashboardText.indexOf("'<section><h3>推荐歌单'") >= 0, '要有「推荐歌单」分区');
   assert.ok(dashboardText.indexOf('每日推荐<span> · ') >= 0, '要有「每日推荐」分区');
   assert.ok(dashboardText.indexOf('.slice(0, 30)') >= 0, '歌曲条数上限 30');
   // 回归：QQ 的歌曲存在 qqFeed.songs，播放函数原先只读 feeds.qq.songs（空数组）→ 点击毫无反应
@@ -80,6 +80,17 @@ function testRecommendationsSyncPerPlatform() {
   // 打开面板与切换平台都会触发一次加载（过期时即重新同步）
   assert.ok(dashboardText.indexOf('loadHomePlatformRecommendations(source, false);') >= 0);
   assert.ok(dashboardText.indexOf('loadHomePlatformRecommendations(tab.getAttribute') >= 0);
+  // 二改：自动同步周期为「一天」——超过一天没手动刷新，下次打开时随每日推荐一起同步歌单
+  assert.ok(dashboardText.indexOf('var HOME_PLATFORM_RECOMMEND_STALE_MS = 24 * 60 * 60 * 1000;') >= 0,
+    '自动同步周期应为一天');
+  // 推荐歌单区要有「刷新歌单」按钮，且各平台都有
+  assert.ok(dashboardText.indexOf('function homePlatformRecommendationRefreshButton(source, label)') >= 0);
+  assert.ok(dashboardText.indexOf("homePlatformRecommendationRefreshButton('netease', '刷新歌单')") >= 0);
+  assert.ok(dashboardText.indexOf("homePlatformRecommendationRefreshButton('qq', '刷新歌单')") >= 0);
+  assert.ok(dashboardText.indexOf("homePlatformRecommendationRefreshButton(source, '刷新推荐')") >= 0);
+  assert.ok(dashboardText.indexOf("closest('[data-home-recommend-refresh]')") >= 0, '点击要能识别刷新按钮');
+  assert.ok(dashboardText.indexOf('loadHomePlatformRecommendations(refreshSource, true);') >= 0,
+    '刷新按钮要强制重新同步');
 }
 
 function testDashboardWiring() {

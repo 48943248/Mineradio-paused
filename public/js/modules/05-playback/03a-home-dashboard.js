@@ -893,6 +893,12 @@ function homePlatformRecommendationFeedConfig(source) {
   }[source] || null;
 }
 
+// 二改：推荐歌单/推荐内容的「刷新」按钮，点击强制重新同步该平台。
+function homePlatformRecommendationRefreshButton(source, label) {
+  return '<button type="button" class="home-platform-recommend-refresh-btn" data-home-recommend-refresh="'
+    + escHtml(source) + '">' + escHtml(label || '刷新') + '</button>';
+}
+
 function homePlatformRecommendationCard(kind, index, item, label) {
   item = item || {};
   var title = item.name || item.title || '未命名内容';
@@ -1020,7 +1026,8 @@ function renderHomePlatformRecommendations() {
     var playlists = Array.isArray(homeDiscoverState.playlists) ? homeDiscoverState.playlists.slice(0, 6) : [];
     var songs = Array.isArray(homeDiscoverState.songs) ? homeDiscoverState.songs : [];
     if (playlists.length) {
-      sections.push('<section><h3>推荐歌单</h3><div class="home-platform-recommend-grid">' + playlists.map(function (item, index) {
+      sections.push('<section><h3>推荐歌单' + homePlatformRecommendationRefreshButton('netease', '刷新歌单')
+        + '</h3><div class="home-platform-recommend-grid">' + playlists.map(function (item, index) {
         return homePlatformRecommendationCard('netease-playlist', index, item, '网易云推荐歌单');
       }).join('') + '</div></section>');
     }
@@ -1053,7 +1060,8 @@ function renderHomePlatformRecommendations() {
     }
     var qqSections = [];
     if (qqFeed.playlists && qqFeed.playlists.length) {
-      qqSections.push('<section><h3>推荐歌单</h3><div class="home-platform-recommend-grid">' + qqFeed.playlists.map(function (item, index) {
+      qqSections.push('<section><h3>推荐歌单' + homePlatformRecommendationRefreshButton('qq', '刷新歌单')
+        + '</h3><div class="home-platform-recommend-grid">' + qqFeed.playlists.map(function (item, index) {
         return homePlatformRecommendationCard('qq-playlist', index, item, 'QQ 音乐推荐歌单');
       }).join('') + '</div></section>');
     }
@@ -1109,7 +1117,8 @@ function renderHomePlatformRecommendations() {
         readyText = '来自 Spotify Web API 的个人常听';
       }
       status.textContent = readyText;
-      list.innerHTML = '<section><h3>' + escHtml(sectionTitle) + '</h3><div class="home-platform-recommend-grid">' + feedState.songs.map(function (item, index) {
+      list.innerHTML = '<section><h3>' + escHtml(sectionTitle) + homePlatformRecommendationRefreshButton(source, '刷新推荐')
+        + '</h3><div class="home-platform-recommend-grid">' + feedState.songs.map(function (item, index) {
         return homePlatformRecommendationCard(source + '-song', index, item, cardLabel);
       }).join('') + '</div></section>';
     } else {
@@ -1129,8 +1138,9 @@ function renderHomePlatformRecommendations() {
 }
 
 // 二改：平台推荐内容（推荐歌单 / 每日推荐 30 首）要和各平台同步更新。
-// 上游是「加载过就不再拉」，这里加过期时间：超过 5 分钟再次打开面板或切平台会重新同步。
-var HOME_PLATFORM_RECOMMEND_STALE_MS = 5 * 60 * 1000;
+// 上游是「加载过就不再拉」。这里改为一天：超过一天没有手动刷新时，
+// 下次打开软件（面板）刷新每日推荐 30 首的同时会把推荐歌单一起同步。
+var HOME_PLATFORM_RECOMMEND_STALE_MS = 24 * 60 * 60 * 1000;
 function homePlatformRecommendationsAreStale(loaded, loadedAt) {
   if (!loaded) return true;
   if (!loadedAt) return true;
@@ -1348,6 +1358,13 @@ function bindHomePlatformRecommendationControls() {
     loadHomePlatformRecommendations(tab.getAttribute('data-home-recommend-source'), false);
   });
   if (list) list.addEventListener('click', function (event) {
+    var refreshBtn = event.target.closest('[data-home-recommend-refresh]');
+    if (refreshBtn && list.contains(refreshBtn)) {
+      var refreshSource = refreshBtn.getAttribute('data-home-recommend-refresh') || homePlatformRecommendationState.source;
+      if (typeof showToast === 'function') showToast('正在刷新' + homePlatformRecommendationSourceLabel(refreshSource) + '推荐…');
+      loadHomePlatformRecommendations(refreshSource, true);
+      return;
+    }
     var card = event.target.closest('[data-home-recommend-kind]');
     if (!card || !list.contains(card)) return;
     var kind = card.getAttribute('data-home-recommend-kind');
