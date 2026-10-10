@@ -18367,6 +18367,7 @@ body.panel-reordering .mini-queue-item.is-reordering {
 
 .home-platform-recommend-head {
   display: flex;
+  flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px
@@ -18437,6 +18438,9 @@ body.panel-reordering .mini-queue-item.is-reordering {
 .home-platform-recommend-status {
   position: relative;
   z-index: 1;
+  /* 关键：面板是 flex 纵向布局，这里必须禁止压缩，否则列表内容一多
+     就会把状态行压扁，文字溢出到上方标签行上（看起来像"挡住按钮"）。 */
+  flex: 0 0 auto;
   min-height: 17px;
   margin-top: 13px;
   color: rgba(255, 255, 255, .45);

@@ -30,7 +30,6 @@ var homePlatformRecommendationState = {
     qishui: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
     kugou: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
     qq: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
-    spotify: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
   },
 };
 
@@ -888,14 +887,6 @@ function homePlatformRecommendationFeedConfig(source) {
       cardLabel: 'QQ 音乐推荐',
       readyText: '来自 QQ 音乐推荐',
       playlistName: 'QQ 音乐推荐',
-    },
-    // 二改：恢复 Spotify 平台推荐（需要先在账号面板完成 Spotify 授权）。
-    spotify: {
-      endpoint: '/api/spotify/recommendations?limit=12',
-      sectionTitle: '平台推荐',
-      cardLabel: 'Spotify 推荐',
-      readyText: '来自 Spotify Web API 推荐',
-      playlistName: 'Spotify 推荐',
     },
   }[source] || null;
 }

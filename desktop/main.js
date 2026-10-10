@@ -106,6 +106,8 @@ const APP_NAME = process.env.MINERADIO_RUNTIME_NAME || APP_METADATA.runtimeName 
 const APP_USER_MODEL_ID = process.env.MINERADIO_APP_USER_MODEL_ID || APP_METADATA.appUserModelId || (APP_PACKAGE_INFO.build && APP_PACKAGE_INFO.build.appId) || 'com.mineradio.desktop';
 const APP_ICON_ICO = path.join(__dirname, '..', 'build', 'icon.ico');
 const CURRENT_FX_AUTOSAVE_FILE = 'current-fx-autosave.json';
+// 二改：桌面歌词窗口位置记忆文件（放在 userData 里，退出重进后恢复位置）
+const DESKTOP_LYRICS_BOUNDS_FILE = 'desktop-lyrics-bounds.json';
 const CURRENT_FX_AUTOSAVE_MAX_BYTES = 12 * 1024 * 1024;
 const STARTUP_ERROR_LOG_FILE = 'startup-error.log';
 const STARTUP_STATE_FILE = 'startup-state.json';
@@ -3587,10 +3589,51 @@ function setDesktopLyricsBounds(bounds) {
   }, 120);
 }
 
+// 二改：上游只在内存里记桌面歌词窗口位置（desktopLyricsUserBounds），
+// 退出重进就回到默认位置。这里把窗口位置落盘，下次启动直接恢复。
+function desktopLyricsBoundsFilePath() {
+  return path.join(app.getPath('userData'), DESKTOP_LYRICS_BOUNDS_FILE);
+}
+function readDesktopLyricsBoundsFile() {
+  try {
+    const data = JSON.parse(fs.readFileSync(desktopLyricsBoundsFilePath(), 'utf8'));
+    const nums = ['x', 'y', 'width', 'height'].map((key) => Number(data && data[key]));
+    if (nums.every((value) => Number.isFinite(value))) {
+      return { x: nums[0], y: nums[1], width: nums[2], height: nums[3] };
+    }
+  } catch (err) {
+    // 首次运行或文件损坏：按默认位置处理
+  }
+  return null;
+}
+let desktopLyricsBoundsSaveTimer = null;
+function writeDesktopLyricsBoundsFile(bounds) {
+  if (!bounds) return;
+  try {
+    fs.writeFileSync(desktopLyricsBoundsFilePath(), JSON.stringify({
+      x: Math.round(Number(bounds.x) || 0),
+      y: Math.round(Number(bounds.y) || 0),
+      width: Math.round(Number(bounds.width) || 0),
+      height: Math.round(Number(bounds.height) || 0),
+      savedAt: Date.now(),
+    }), 'utf8');
+  } catch (err) {
+    console.warn('[DesktopLyrics] bounds save failed:', err.message);
+  }
+}
+function scheduleDesktopLyricsBoundsSave(bounds) {
+  if (desktopLyricsBoundsSaveTimer) clearTimeout(desktopLyricsBoundsSaveTimer);
+  desktopLyricsBoundsSaveTimer = setTimeout(() => {
+    desktopLyricsBoundsSaveTimer = null;
+    writeDesktopLyricsBoundsFile(bounds);
+  }, 240);
+}
+
 function rememberDesktopLyricsBounds() {
   if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed() || desktopLyricsProgrammaticMove) return;
   desktopLyricsUserBounds = desktopLyricsWindow.getBounds();
   syncDesktopLyricsYFromBounds(desktopLyricsUserBounds);
+  scheduleDesktopLyricsBoundsSave(desktopLyricsUserBounds);
 }
 
 // 桌面歌词窗口内调节：只接受已知字段，并按主面板同一范围钳制
@@ -3787,6 +3830,7 @@ function broadcastDesktopLyricsEnabledState(enabled) {
 
 function positionDesktopLyricsWindow(payload = desktopLyricsState, options = {}) {
   if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return;
+  if (!desktopLyricsUserBounds) desktopLyricsUserBounds = readDesktopLyricsBoundsFile();
   const shouldUseManualBounds = desktopLyricsUserBounds && !options.force;
   setDesktopLyricsBounds(shouldUseManualBounds ? desktopLyricsUserBounds : desktopLyricsDefaultBounds(payload));
   if (typeof desktopLyricsWindow.setOpacity === 'function') {

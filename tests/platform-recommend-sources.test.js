@@ -46,12 +46,16 @@ function testDashboardWiring() {
   assert.ok(dashboardText.indexOf("source === 'qq' && feedState.fallback") >= 0, 'QQ 走榜单兜底时文案要说明来源');
   assert.ok(dashboardText.indexOf('sectionTitle = qqRankName;') >= 0);
   // 三个平台的标签页都在
-  ['netease', 'qishui', 'qq', 'kugou', 'spotify'].forEach((source) => {
+  ['netease', 'qishui', 'qq', 'kugou'].forEach((source) => {
     assert.ok(indexHtml.indexOf('data-home-recommend-source="' + source + '"') >= 0, source + ' 标签页缺失');
   });
-  // 二改：Spotify 的推荐配置也要在（上游移除时连标签页一起删了）
-  assert.ok(dashboardText.indexOf("endpoint: '/api/spotify/recommendations?limit=12'") >= 0, 'Spotify feed 要指向推荐端点');
-  assert.ok(dashboardText.indexOf('spotify: { loading: false') >= 0, '要有 Spotify 的 feed 状态');
+  // 二改：Spotify 已按要求整体移除，不应再出现在平台推荐面板里。
+  assert.strictEqual(indexHtml.indexOf('data-home-recommend-source="spotify"'), -1, 'Spotify 标签页应已移除');
+  assert.strictEqual(
+    dashboardText.indexOf('/api/spotify/recommendations'),
+    -1,
+    'Spotify 推荐配置应已移除'
+  );
   // 布局回归：状态文字曾把标签按钮挡住，标签行必须压在状态之上且不被压缩。
   const cssText = fs.readFileSync(path.join(appRoot, 'public', 'css', 'index.css'), 'utf8');
   const tabsRule = (cssText.match(/\.home-platform-recommend-tabs\s*\{[^}]*\}/) || [''])[0];
