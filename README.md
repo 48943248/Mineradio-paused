@@ -123,21 +123,18 @@ Mineradio 由 XxHuberrr 主要设计与打造。emily 作为早期视觉底层�
 
 ### 上游关系
 
-本仓库是 [XxHuberrr/Mineradio](https://github.com/XxHuberrr/Mineradio) 的**非官方修改版本（fork）**，以上游 `v2.2.0` 的公开源码为基线。除下方列出的改动外，其余代码、界面与文档均来自上游。
+本仓库是 [XxHuberrr/Mineradio-paused](https://github.com/XxHuberrr/Mineradio-paused) 的**非官方修改版本（fork）**，以上游 `v2.2.0` 的公开源码为基线。除下方列出的改动外，其余代码、界面与文档均来自上游。
 
 | 项目 | 上游 | 本仓库（二改版） |
 | --- | --- | --- |
-| 仓库 | [XxHuberrr/Mineradio](https://github.com/XxHuberrr/Mineradio) | [48943248/Mineradio-paused](https://github.com/48943248/Mineradio-paused) |
+| 仓库 | [XxHuberrr/Mineradio-paused](https://github.com/XxHuberrr/Mineradio-paused) | [48943248/Mineradio-paused](https://github.com/48943248/Mineradio-paused) |
 | 基线版本 | `v2.2.0` | `v2.2.0` + 二改补丁 |
 | 授权 | GPL-3.0-only | GPL-3.0-only（沿用同一许可证） |
 | 维护状态 | 长期停更 | 个人自用二改，非官方、无背书 |
 
 ### 版权
 
-- **原版 Mineradio**（含代码、界面视觉设计、原始视觉表达、MR Logo 与 Mineradio 名称）：Copyright (C) 2026 XxHuberrr，依 GPL-3.0 授权。
-- **本二改版新增与修改的部分**：Copyright (C) 2026 本仓库维护者（GitHub `48943248`），在上游原有许可范围内完成，并同样以 GPL-3.0 授权。
-- 二改者**不主张**对上游原有内容、名称或标识的任何权利；`Mineradio` 名称与 MR Logo 等标识**不随 GPL 授权转移**，本二改版不以官方名义分发，也不代表上游作者立场。
-- 第三方依赖与第三方音乐服务分别遵循其各自的授权与服务条款。
+版权与授权声明以下方 [版权与授权](#版权与授权) 章节为准：上游原版版权归 XxHuberrr 所有，二改部分版权归本仓库维护者；第三方依赖与第三方音乐服务分别遵循其各自的授权与服务条款。
 
 ### 许可与"修改"声明
 
@@ -159,10 +156,30 @@ Mineradio 由 XxHuberrr 主要设计与打造。emily 作为早期视觉底层�
 6. **无担保**：与 GPL-3.0 第 15、16 条一致，本二改版按"现状"提供，**不提供任何明示或默示担保**（包括可售性与特定用途适用性）；因使用本软件产生的任何后果由使用者自行承担。
 7. **合规提示**：GPL-3.0 允许商业性再分发，但再分发者必须自行遵守上述全部条款；`Mineradio` 名称、MR Logo 等标识的使用需另行获得权利人许可。
 
-## 版权与授权（原版声明）
+## 版权与授权
+
+本项目是基于 [XxHuberrr/Mineradio-paused](https://github.com/XxHuberrr/Mineradio-paused) 的二次开发版本。
+
+上游项目作者：XxHuberrr  
+上游项目采用 **GNU General Public License v3.0 (GPL-3.0)** 授权。
+
+本项目在上游项目基础上进行了修改和功能扩展，包括但不限于：
+
+- 增加播放源一键切换功能
+- 增加播放源选择的持久化
+- 切换播放源后自动沿用所选播放源
+- 其他个人修改和优化
+
+由于本项目包含上游 GPL-3.0 授权代码，本项目整体按照 **GPL-3.0** 发布。
+
+本项目的修改版本应继续遵守 GPL-3.0 的相关条款。
+
+Copyright © 2026 48943248
+
+### 上游原版版权保留
+
+为遵守 GPL-3.0 对修改版本的要求，上游原版的版权声明在此一并保留：
 
 Copyright (C) 2026 XxHuberrr.
 
-本项目采用 GPL-3.0 授权。详见 [LICENSE](./LICENSE)。
-
-MR Logo、Mineradio 名称、界面视觉设计与原创视觉表达归作者所有；第三方依赖和第三方服务分别遵循其各自授权与服务条款。
+MR Logo、Mineradio 名称、界面视觉设计与原创视觉表达归原作者所有，且**不随 GPL 授权转移**；第三方依赖和第三方服务分别遵循其各自授权与服务条款。完整差异与"已修改"声明见上方 [许可与"修改"声明](#许可与修改声明)。
