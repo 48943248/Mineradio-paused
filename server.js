@@ -3563,39 +3563,51 @@ const QQ_RECOMMEND_TOPLISTS = [
   { id: 62, name: '飙升榜' },
   { id: 4, name: '原创榜' },
 ];
+// 二改：QQ「雷达推荐」返回的字段名各版本不一致，尽量把歌曲 mid 都取出来。
+function qqRadarSongMids(data) {
+  if (!data || typeof data !== 'object') return [];
+  const candidates = [
+    data.songlist, data.SongList, data.list, data.List, data.v_song, data.vSong,
+    data.trackList, data.TrackList, data.songs, data.Songs, data.recommendSongs, data.data,
+  ];
+  const mids = [];
+  candidates.forEach((list) => {
+    if (!Array.isArray(list)) return;
+    list.forEach((item) => {
+      const song = (item && (item.track_info || item.trackInfo || item.song_info || item.songInfo || item.song || item.track)) || item || {};
+      const mid = song.songmid || song.mid || song.songMid || song.SongMID;
+      if (mid) mids.push(String(mid));
+    });
+  });
+  return mids;
+}
+
 let qqRecommendToplistCursor = 0;
 async function qqRecommendRawMids(limit) {
   const num = Math.max(4, Math.min(30, Number(limit) || 12));
+  // 二改：QQ 的个性化推荐走「雷达推荐」。这个接口的请求体顶层键就是 module 名，
+  // 与其它 musicu 接口（req/lyric/comm 那套）写法不同，之前用错 module 才一直 500003。
+  const RADAR_MODULE = 'music.recommend.TrackRelationServer';
   try {
     const json = await qqMusicRequest({
       comm: { ct: 24, cv: 0, uin: qqCookieUin() || '0' },
-      req: {
-        module: 'music.smartboxCgi.MusicSmartBoxSvr',
-        method: 'GetRecommendSongList',
-        param: {
-          FromType: 1,
-          Start: 0,
-          Num: num,
-          Guid: String(10000000 + Math.floor(Math.random() * 90000000)),
-        },
+      [RADAR_MODULE]: {
+        method: 'GetRadarSong',
+        module: RADAR_MODULE,
+        param: { Page: 1, ReqType: 0, FavSongs: [], EntranceSongs: [] },
       },
     }, { cookie: true });
-    const data = json && json.req && json.req.data;
-    const list = (data && (data.songlist || data.v_song || data.list || data.songs)) || [];
-    console.log('[QQRecommend] smartbox code=%s reqCode=%s dataKeys=[%s] listLen=%d',
+    const node = json && json[RADAR_MODULE];
+    const data = node && node.data;
+    const mids = qqRadarSongMids(data);
+    console.log('[QQRecommend] radar code=%s nodeCode=%s dataKeys=[%s] mids=%d',
       json && json.code,
-      json && json.req && json.req.code,
+      node && node.code,
       data ? Object.keys(data).join(',') : '',
-      Array.isArray(list) ? list.length : -1);
-    const mids = [];
-    (Array.isArray(list) ? list : []).forEach((item) => {
-      const song = (item && (item.track_info || item.trackInfo || item.song_info || item.songInfo)) || item || {};
-      const mid = song && (song.mid || song.songmid || song.songMid);
-      if (mid) mids.push(String(mid));
-    });
-    if (mids.length) return { mids: mids.slice(0, num), mode: 'daily', source: 'qq-smartbox' };
+      mids.length);
+    if (mids.length) return { mids: mids.slice(0, num), mode: 'daily', source: 'qq-radar' };
   } catch (err) {
-    console.warn('[QQRecommend] smartbox failed:', err.message);
+    console.warn('[QQRecommend] radar failed:', err.message);
   }
   // 二改：个性化推荐对第三方不可用，按榜单轮流兜底；每次刷新会换一个榜单。
   for (let attempt = 0; attempt < QQ_RECOMMEND_TOPLISTS.length; attempt += 1) {

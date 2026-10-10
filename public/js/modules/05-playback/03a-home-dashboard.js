@@ -31,6 +31,8 @@ var homePlatformRecommendationState = {
     kugou: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
     qq: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
   },
+  // 二改：QQ 平台推荐按网易云同款结构展示（推荐歌单 + 每日推荐 30 首）
+  qqFeed: { loading: false, loaded: false, songs: [], playlists: [], toplistName: '', error: '' },
 };
 
 var HOME_DASHBOARD_REVIEW_DEFAULTS = [
@@ -1042,6 +1044,39 @@ function renderHomePlatformRecommendations() {
     return;
   }
 
+  if (source === 'qq') {
+    var qqFeed = homePlatformRecommendationState.qqFeed;
+    if (!qqFeed || qqFeed.loading) {
+      status.textContent = '正在读取 QQ 音乐推荐…';
+      list.innerHTML = '<div class="home-platform-recommend-loading">正在同步推荐内容</div>';
+      return;
+    }
+    var qqSections = [];
+    if (qqFeed.playlists && qqFeed.playlists.length) {
+      qqSections.push('<section><h3>推荐歌单</h3><div class="home-platform-recommend-grid">' + qqFeed.playlists.map(function (item, index) {
+        return homePlatformRecommendationCard('qq-playlist', index, item, 'QQ 音乐歌单');
+      }).join('') + '</div></section>');
+    }
+    if (qqFeed.songs && qqFeed.songs.length) {
+      qqSections.push('<section><h3>每日推荐<span> · ' + qqFeed.songs.length + ' 首</span></h3><div class="home-platform-recommend-grid">' + qqFeed.songs.map(function (item, index) {
+        return homePlatformRecommendationCard('qq-song', index, item, 'QQ 音乐每日推荐');
+      }).join('') + '</div></section>');
+    }
+    if (qqSections.length) {
+      var qqParts = [];
+      if (qqFeed.playlists && qqFeed.playlists.length) qqParts.push('推荐歌单 ' + qqFeed.playlists.length + ' 个');
+      if (qqFeed.songs && qqFeed.songs.length) qqParts.push('每日推荐 ' + qqFeed.songs.length + ' 首');
+      status.textContent = qqParts.join(' · ');
+      status.classList.remove('is-error');
+      list.innerHTML = qqSections.join('');
+    } else {
+      status.textContent = qqFeed.error ? 'QQ 音乐推荐读取失败' : 'QQ 音乐暂未返回推荐内容';
+      status.classList.toggle('is-error', !!qqFeed.error);
+      list.innerHTML = homePlatformRecommendationEmptyHtml('qq', 'QQ 音乐本次没有返回推荐内容，未使用关键词搜索替代。');
+    }
+    return;
+  }
+
   var feedConfig = homePlatformRecommendationFeedConfig(source);
   var feedState = homePlatformRecommendationState.feeds[source];
   if (feedConfig && feedState) {
@@ -1118,7 +1153,45 @@ async function loadHomePlatformQishuiRecommendations(force) {
   return loadHomePlatformFeedRecommendations('qishui', force);
 }
 
+// 二改：QQ 每日推荐 30 首 + 推荐歌单（登录后取自己的歌单，未登录只出歌曲）。
+async function loadHomePlatformQQRecommendations(force) {
+  var state = homePlatformRecommendationState.qqFeed;
+  if (!state || state.loading) return;
+  if (state.loaded && !force) return;
+  state.loading = true;
+  state.error = '';
+  renderHomePlatformRecommendations();
+  try {
+    var results = await Promise.all([
+      apiJson('/api/qq/recommendations?limit=30&t=' + Date.now(), { timeoutMs: 22000 }),
+      apiJson('/api/qq/user/playlists?t=' + Date.now(), { timeoutMs: 15000 }).catch(function () { return null; }),
+    ]);
+    var feed = results[0] || {};
+    var rawSongs = feed.songs;
+    state.songs = (Array.isArray(rawSongs) ? rawSongs : []).slice(0, 30).map(cloneSong);
+    state.toplistName = feed.toplistName ? String(feed.toplistName) : '';
+    var playlistPayload = results[1] || {};
+    var rawPlaylists = playlistPayload.playlists || playlistPayload.list || playlistPayload.data || [];
+    state.playlists = (Array.isArray(rawPlaylists) ? rawPlaylists : []).filter(function (item) {
+      return item && (item.id || item.dissid) && (item.name || item.title);
+    }).slice(0, 6);
+    state.loaded = true;
+  } catch (error) {
+    state.songs = [];
+    state.playlists = [];
+    state.error = String((error && error.message) || 'QQ_RECOMMEND_FAILED');
+    state.loaded = true;
+  } finally {
+    state.loading = false;
+    renderHomePlatformRecommendations();
+  }
+}
+
 async function loadHomePlatformFeedRecommendations(source, force) {
+  if (source === 'qq') {
+    loadHomePlatformQQRecommendations(force);
+    return;
+  }
   var config = homePlatformRecommendationFeedConfig(source);
   var feedState = homePlatformRecommendationState.feeds[source];
   if (!config || !feedState || feedState.loading) return;
