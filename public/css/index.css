@@ -5979,6 +5979,71 @@ body:not(.controls-visible) .lyric-timing-control::before,
   transform: none
 }
 
+/* 二改：歌词校准面板里的「译 / 音」快捷开关与「歌词接入平台」 */
+.lyric-calib-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 9px
+}
+
+.lyric-calib-toggle {
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  background: rgba(255, 255, 255, .045);
+  color: rgba(255, 255, 255, .62);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 820;
+  cursor: pointer;
+  transition: background .16s, color .16s, border-color .16s
+}
+
+.lyric-calib-toggle:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, .09)
+}
+
+.lyric-calib-toggle.active {
+  color: #fff;
+  border-color: rgba(var(--fc-accent-rgb), .46);
+  background: rgba(var(--fc-accent-rgb), .18)
+}
+
+.lyric-calib-platform {
+  margin-top: 10px
+}
+
+.lyric-calib-platform-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 820;
+  color: rgba(255, 255, 255, .58)
+}
+
+.lyric-calib-platform-head small {
+  color: rgba(255, 255, 255, .44);
+  font-size: 10px;
+  font-weight: 760
+}
+
+.lyric-calib-platform .lyric-platform-seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px
+}
+
+.lyric-calib-platform .lyric-platform-seg button {
+  height: 26px;
+  border-radius: 7px;
+  font-size: 11px
+}
+
 #quality-btn.quality-pill {
   width: auto;
   min-width: 34px;

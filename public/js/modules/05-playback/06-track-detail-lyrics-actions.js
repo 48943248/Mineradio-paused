@@ -1053,6 +1053,8 @@ function updateLyricPlatformControls() {
   document.querySelectorAll('#lyric-platform-seg button').forEach(function (btn) {
     btn.classList.toggle('active', btn.dataset.lyricPlatform === mode);
   });
+  var state = document.getElementById('lyric-platform-state');
+  if (state) state.textContent = lyricPlatformLabel(mode);
 }
 function setLyricPlatform(mode) {
   lyricPlatformPreference = normalizeLyricPlatform(mode);
@@ -1070,6 +1072,39 @@ function setLyricPlatform(mode) {
     var usable = song && song.type !== 'local' && song.source !== 'local' && !song.localUrl && song.type !== 'podcast';
     if (usable && typeof trackSwitchToken === 'number') fetchLyric(song, trackSwitchToken);
   }
+}
+// 二改：歌词校准面板里的快捷开关（左「译」= 翻译，右「音」= 音译）。
+// 开启即按"全行显示"（multi），这样不管当前显示几行，可见的每一行都会带译文/音译。
+function updateLyricCalibrationControls() {
+  var translationBtn = document.getElementById('lyric-calib-translation');
+  if (translationBtn) {
+    translationBtn.classList.toggle('active', normalizeLyricTranslationMode(fx && fx.lyricTranslationMode) !== 'off');
+  }
+  var transliterationBtn = document.getElementById('lyric-calib-transliteration');
+  if (transliterationBtn) {
+    transliterationBtn.classList.toggle('active', normalizeLyricTransliterationMode(fx && fx.lyricTransliterationMode) !== 'off');
+  }
+  updateLyricPlatformControls();
+}
+function toggleLyricTranslationQuick() {
+  var turningOn = normalizeLyricTranslationMode(fx && fx.lyricTranslationMode) === 'off';
+  fx.lyricTranslationMode = turningOn ? 'multi' : 'off';
+  updateLyricTranslationModeControls();
+  updateLyricCalibrationControls();
+  refreshStageLyricDisplayMode();
+  saveLyricLayout({ user: true, reason: 'lyricTranslationQuick' });
+  pushDesktopLyricsState(true);
+  showToast(turningOn ? '歌词翻译已开启（全行显示）' : '歌词翻译已关闭');
+}
+function toggleLyricTransliterationQuick() {
+  var turningOn = normalizeLyricTransliterationMode(fx && fx.lyricTransliterationMode) === 'off';
+  fx.lyricTransliterationMode = turningOn ? 'multi' : 'off';
+  updateLyricTransliterationModeControls();
+  updateLyricCalibrationControls();
+  refreshStageLyricDisplayMode();
+  saveLyricLayout({ user: true, reason: 'lyricTransliterationQuick' });
+  pushDesktopLyricsState(true);
+  showToast(turningOn ? '歌词音译已开启（全行显示）' : '歌词音译已关闭');
 }
 function setLyricTransliterationMode(mode) {
   fx.lyricTransliterationMode = normalizeLyricTransliterationMode(mode);

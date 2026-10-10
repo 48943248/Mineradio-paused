@@ -787,9 +787,12 @@ function toggleLyricsPanel(force) {
   else fx.particleLyrics = !fx.particleLyrics;
   if (fx.particleLyrics) {
     createLyricsParticles();
-    if (typeof requestStageLyricWarmup === 'function') requestStageLyricWarmup('toggleLyricsPanel', 150);
-    if (typeof scheduleStageLyricPrewarm === 'function') scheduleStageLyricPrewarm('toggleLyricsPanel', 48);
-    if (typeof scheduleStageLyricFullTrackWarmup === 'function') scheduleStageLyricFullTrackWarmup('track-ready', 220);
+    // 二改：开关歌词不再带延迟——先同步刷一次当前行，再把预热延迟归零，
+    // 避免"点了歌词要等一下才出现"。
+    if (typeof refreshCurrentLyricStyle === 'function') refreshCurrentLyricStyle();
+    if (typeof requestStageLyricWarmup === 'function') requestStageLyricWarmup('toggleLyricsPanel', 0);
+    if (typeof scheduleStageLyricPrewarm === 'function') scheduleStageLyricPrewarm('toggleLyricsPanel', 0);
+    if (typeof scheduleStageLyricFullTrackWarmup === 'function') scheduleStageLyricFullTrackWarmup('track-ready', 0);
     showToast('歌词已开启');
   } else {
     clearStageLyrics();

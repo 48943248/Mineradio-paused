@@ -6418,12 +6418,23 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---------- 歌词 ----------
+  // 网易云新的 lyric_new 接口会把 lrc.lyric 返回成逐字 JSON（以 { / [ 开头），那不是 LRC，
+  // 前端按 LRC 解析会一行都拿不到（译文、音译也就无处可贴）。这里统一识别并优先使用纯 LRC。
+  function lyricTextLooksStructured(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return false;
+    // 标准 LRC 以 [mm:ss 开头；结构化逐字 JSON 是 {"t":…} 或 [{"t":…}。
+    if (raw.charAt(0) === '{') return true;
+    if (raw.charAt(0) === '[' && raw.charAt(1) === '{') return true;
+    return false;
+  }
   function lyricNodeText(body, key) {
     return body && body[key] && typeof body[key].lyric === 'string' ? body[key].lyric : '';
   }
 
   function lyricBodyHasPrimary(body) {
-    return !!(lyricNodeText(body, 'lrc') || lyricNodeText(body, 'yrc'));
+    const lrc = lyricNodeText(body, 'lrc');
+    return !!((lrc && !lyricTextLooksStructured(lrc)) || lyricNodeText(body, 'yrc'));
   }
 
   function lyricBodyHasTranslation(body) {
@@ -6432,9 +6443,14 @@ const server = http.createServer(async (req, res) => {
 
   function mergeLyricBodies(primary, fallback) {
     const merged = Object.assign({}, fallback || {}, primary || {});
-    ['lrc', 'tlyric', 'yrc', 'ytlrc', 'romalrc', 'yromalrc', 'klyric'].forEach((key) => {
+    ['tlyric', 'yrc', 'ytlrc', 'romalrc', 'yromalrc', 'klyric'].forEach((key) => {
       if (!lyricNodeText(merged, key) && fallback && fallback[key]) merged[key] = fallback[key];
     });
+    const mergedLrcText = (merged.lrc && typeof merged.lrc.lyric === 'string') ? merged.lrc.lyric : '';
+    const fallbackLrcText = (fallback && fallback.lrc && typeof fallback.lrc.lyric === 'string') ? fallback.lrc.lyric : '';
+    if ((!mergedLrcText || lyricTextLooksStructured(mergedLrcText)) && fallbackLrcText && !lyricTextLooksStructured(fallbackLrcText)) {
+      merged.lrc = { lyric: fallbackLrcText };
+    }
     return merged;
   }
 
@@ -6458,8 +6474,9 @@ const server = http.createServer(async (req, res) => {
         body = mergeLyricBodies(body, r.body || {});
         source = source === 'lyric_new' ? 'lyric_new+lyric' : 'lyric';
       }
+      const primaryLrcText = lyricNodeText(body, 'lrc');
       sendJSON(res, {
-        lyric: (body.lrc && body.lrc.lyric) || '',
+        lyric: lyricTextLooksStructured(primaryLrcText) ? '' : primaryLrcText,
         tlyric: (body.tlyric && body.tlyric.lyric) || '',
         yrc: (body.yrc && body.yrc.lyric) || '',
         ytlrc: (body.ytlrc && body.ytlrc.lyric) || '',

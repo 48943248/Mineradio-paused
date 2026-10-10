@@ -15,6 +15,7 @@ const actionsText = fs.readFileSync(
   'utf8'
 );
 const indexHtml = fs.readFileSync(path.join(appRoot, 'public', 'index.html'), 'utf8');
+const serverText = fs.readFileSync(path.join(appRoot, 'server.js'), 'utf8');
 
 function createSandbox() {
   const store = new Map();
@@ -120,16 +121,37 @@ function testLyricPlatformPreference() {
 }
 
 function testUiWiringPresent() {
-  assert.ok(indexHtml.indexOf('id="lyric-transliteration-mode-seg"') >= 0, '设置面板应有歌词音译档位');
-  assert.ok(indexHtml.indexOf('id="lyric-platform-seg"') >= 0, '设置面板应有歌词平台选择');
-  assert.ok(indexHtml.indexOf("setLyricTransliterationMode(") >= 0);
-  assert.ok(indexHtml.indexOf("setLyricPlatform(") >= 0);
+  // 快捷开关与歌词平台现在挂在播放器控制台的「歌词校准」面板里。
+  assert.ok(indexHtml.indexOf('id="lyric-calib-translation"') >= 0, '歌词校准面板应有翻译开关');
+  assert.ok(indexHtml.indexOf('id="lyric-calib-transliteration"') >= 0, '歌词校准面板应有音译开关');
+  assert.ok(indexHtml.indexOf('id="lyric-platform-seg"') >= 0, '歌词校准面板应有歌词接入平台');
+  assert.ok(indexHtml.indexOf('id="lyric-platform-state"') >= 0, '应显示当前锁定的歌词平台');
+  assert.ok(indexHtml.indexOf('toggleLyricTranslationQuick(') >= 0);
+  assert.ok(indexHtml.indexOf('toggleLyricTransliterationQuick(') >= 0);
+  assert.ok(indexHtml.indexOf('setLyricPlatform(') >= 0);
+  // 旧的外观面板入口已经移除（改为校准面板里的两个开关）。
+  assert.strictEqual(indexHtml.indexOf('id="lyric-transliteration-mode-seg"'), -1, '旧音译档位段应已移除');
+
   assert.ok(actionsText.indexOf('function setLyricTransliterationMode(') >= 0);
   assert.ok(actionsText.indexOf('function updateLyricTransliterationModeControls(') >= 0);
   assert.ok(actionsText.indexOf('function setLyricPlatform(') >= 0);
   assert.ok(actionsText.indexOf('function updateLyricPlatformControls(') >= 0);
+  assert.ok(actionsText.indexOf('function toggleLyricTranslationQuick(') >= 0);
+  assert.ok(actionsText.indexOf('function toggleLyricTransliterationQuick(') >= 0);
   assert.ok(actionsText.indexOf('line.transliteration ||') >= 0, '歌词渲染签名要包含音译，否则音译变化不刷新');
   assert.ok(persistenceText.indexOf('normalizeSavedLyricTransliterationMode') >= 0, '音译档位要能持久化');
+  // 开启即"全行显示"，避免译文/音译只出现在两行上。
+  assert.ok(actionsText.indexOf("fx.lyricTranslationMode = turningOn ? 'multi' : 'off'") >= 0);
+  assert.ok(actionsText.indexOf("fx.lyricTransliterationMode = turningOn ? 'multi' : 'off'") >= 0);
+}
+
+function testServerLyricLrcGuard() {
+  // 网易云 lyric_new 的 lrc 是逐字 JSON，不是 LRC；服务端必须识别并回退到纯 LRC，
+  // 否则主歌词解析为空，译文与音译都无处可贴。
+  assert.ok(serverText.indexOf('function lyricTextLooksStructured(') >= 0, '服务端要识别结构化伪 LRC');
+  assert.ok(serverText.indexOf('lyricTextLooksStructured(primaryLrcText) ? \'\' : primaryLrcText') >= 0, '发送前不能把 JSON 当 LRC 下发');
+  assert.ok(serverText.indexOf('!lyricTextLooksStructured(fallbackLrcText)') >= 0, '合并时要优先保留纯 LRC');
+  assert.ok(serverText.indexOf('lyricTextLooksStructured(lrc)') >= 0, '结构化 lrc 不应被当作可用主歌词');
 }
 
 testTransliterationAliases();
@@ -137,4 +159,5 @@ testTransliterationPayload();
 testAttachToPrimaryLines();
 testLyricPlatformPreference();
 testUiWiringPresent();
+testServerLyricLrcGuard();
 console.log('OK lyric-transliteration');
