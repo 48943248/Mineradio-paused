@@ -1317,7 +1317,16 @@ async function playQQRecommendPlaylist(index) {
     );
     var songs = (data && (data.songs || data.tracks || data.list)) || [];
     if (!Array.isArray(songs) || !songs.length) {
-      if (typeof showToast === 'function') showToast('该歌单暂无可用曲目');
+      // 二改：区分「QQ 上游失败/被限流」与「歌单真的是空的」，不再一律说成没有曲目
+      var upstreamError = String((data && (data.error || data.message)) || '');
+      var looksLimited = /EMPTY_OR_LIMITED|UPSTREAM|RATE|LIMIT|LOGIN_REQUIRED|频繁|限流/i.test(upstreamError);
+      if (typeof showToast === 'function') {
+        showToast(looksLimited
+          ? (String(upstreamError).indexOf('LOGIN_REQUIRED') >= 0
+            ? '需要登录 QQ 音乐后才能读取该歌单'
+            : 'QQ 音乐暂时没有返回该歌单内容（可能请求过快），请稍后再点')
+          : '该歌单暂无可用曲目');
+      }
       return;
     }
     playQueue = songs.map(cloneSong);

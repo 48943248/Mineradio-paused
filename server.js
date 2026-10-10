@@ -3203,6 +3203,10 @@ async function handleQQUserPlaylists() {
   return { loggedIn: true, provider: 'qq', userId: uin, playlists };
 }
 
+// 二改：QQ 歌单曲目的短时缓存。QQ 对短时间内的重复请求会返回 nodeCode=6000 风控，
+// 命中缓存可以显著减少触发风控的机会（只在成功拿到曲目时写入）。
+const qqPlaylistTracksCache = new Map();
+
 async function handleQQPlaylistTracks(id, opts) {
   opts = opts || {};
   const info = await getQQLoginInfo();
@@ -3683,7 +3687,12 @@ async function handleQQRecommendPlaylists(limit, page) {
   const playlists = (Array.isArray(list) ? list : []).map(mapQQFeedPlaylist).filter((item) => item.id && item.name);
   console.log('[QQRecommendPlaylist] code=%s nodeCode=%s listLen=%d mapped=%d',
     json && json.code, node && node.code, Array.isArray(list) ? list.length : -1, playlists.length);
-  return { provider: 'qq', playlists: playlists.slice(0, size) };
+  return {
+    provider: 'qq',
+    playlists: playlists.slice(0, size),
+    // 二改：带上上游错误码（例如 6000 = 请求过于频繁），便于前端给出正确提示
+    error: playlists.length ? '' : ('QQ_RECOMMEND_PLAYLIST_' + ((node && node.code) || 'EMPTY')),
+  };
 }
 
 async function handleQQRecommendations(limit) {
@@ -6086,10 +6095,23 @@ const server = http.createServer(async (req, res) => {
   if (pn === '/api/qq/playlist/tracks') {
     try {
       const id = url.searchParams.get('id') || url.searchParams.get('disstid') || '';
+      // 二改：命中 60 秒缓存直接返回，减少触发 QQ 风控
+      const cacheKey = 'qq-playlist-tracks:' + id;
+      const cached = qqPlaylistTracksCache.get(cacheKey);
+      if (cached && Date.now() - cached.at < 60 * 1000) {
+        sendJSON(res, cached.data);
+        return;
+      }
       const data = await handleQQPlaylistTracks(id, {
         limit: url.searchParams.get('limit') || '',
         offset: url.searchParams.get('offset') || '0',
       });
+      const trackList = (data && (data.tracks || data.songs)) || [];
+      // 二改：空结果必须带上原因码，否则前端会把「被限流」误报成「该歌单暂无可用曲目」
+      if (!trackList.length && data && !data.error) {
+        data.error = data.loggedIn === false ? 'QQ_LOGIN_REQUIRED' : 'QQ_PLAYLIST_EMPTY_OR_LIMITED';
+      }
+      if (trackList.length) qqPlaylistTracksCache.set(cacheKey, { at: Date.now(), data: data });
       sendJSON(res, data);
     } catch (err) {
       console.error('[QQPlaylistTracks]', err);
