@@ -3553,6 +3553,85 @@ function truthyQQPlaybackHint(value) {
   return value === true || text === '1' || text === 'true' || text === 'yes' || text === 'vip';
 }
 
+// 二改：QQ 音乐「平台推荐」。优先取个性化的每日推荐，不可用时回退到官方热歌榜，
+// 最后再用 QQ 搜索结果的详情补全函数把 mid 映射成与 QQ 搜索一致的歌曲结构。
+async function qqRecommendRawMids(limit) {
+  const num = Math.max(4, Math.min(30, Number(limit) || 12));
+  try {
+    const json = await qqMusicRequest({
+      comm: { ct: 24, cv: 0, uin: qqCookieUin() || '0' },
+      req: {
+        module: 'music.smartboxCgi.MusicSmartBoxSvr',
+        method: 'GetRecommendSongList',
+        param: {
+          FromType: 1,
+          Start: 0,
+          Num: num,
+          Guid: String(10000000 + Math.floor(Math.random() * 90000000)),
+        },
+      },
+    }, { cookie: true });
+    const data = json && json.req && json.req.data;
+    const list = (data && (data.songlist || data.v_song || data.list || data.songs)) || [];
+    const mids = [];
+    (Array.isArray(list) ? list : []).forEach((item) => {
+      const song = (item && (item.track_info || item.trackInfo || item.song_info || item.songInfo)) || item || {};
+      const mid = song && (song.mid || song.songmid || song.songMid);
+      if (mid) mids.push(String(mid));
+    });
+    if (mids.length) return { mids: mids.slice(0, num), mode: 'daily', source: 'qq-smartbox' };
+  } catch (err) {
+    console.warn('[QQRecommend] smartbox failed:', err.message);
+  }
+  try {
+    const body = await qqGetJSON('https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg', {
+      topid: 26,
+      song_begin: 0,
+      song_num: num,
+      format: 'json',
+      tpl: 3,
+      page: 'detail',
+      type: 'top',
+      platform: 'yqq.json',
+      needNewCode: 1,
+      inCharset: 'utf8',
+      outCharset: 'utf-8',
+      notice: 0,
+    }, { headers: { Referer: 'https://y.qq.com/n/yqq/toplist/26.html' } });
+    const list = (body && body.songlist) || [];
+    const mids = list.map((row) => row && row.data && (row.data.songmid || row.data.mid)).filter(Boolean);
+    if (mids.length) return { mids: mids.slice(0, num).map(String), mode: 'toplist', source: 'qq-toplist-26' };
+  } catch (err) {
+    console.warn('[QQRecommend] toplist failed:', err.message);
+  }
+  return { mids: [], mode: '', source: '' };
+}
+
+async function handleQQRecommendations(limit) {
+  const picked = await qqRecommendRawMids(limit);
+  if (!picked.mids.length) {
+    return { provider: 'qq', songs: [], mode: '', source: '', error: 'EMPTY' };
+  }
+  const results = await Promise.all(picked.mids.map(async (mid) => {
+    try {
+      const song = await qqSongDetail(mid, { mid });
+      return song && song.name ? song : null;
+    } catch (err) {
+      console.warn('[QQRecommend] detail failed:', mid, err.message);
+      return null;
+    }
+  }));
+  const seen = new Set();
+  const songs = results.filter((song) => {
+    if (!song) return false;
+    const key = song.mid || song.id || (song.name + '|' + song.artist);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { provider: 'qq', songs, mode: picked.mode, source: picked.source, fallback: picked.mode === 'toplist' };
+}
+
 function qqPlaybackMemberHints(hints) {
   hints = hints || {};
   const fee = Number(hints.fee || hints.Fee || 0) || 0;
@@ -5032,6 +5111,17 @@ const server = http.createServer(async (req, res) => {
       sendJSON(res, { provider: 'qq', songs, offset, limit, nextOffset: offset + songs.length, hasMore: songs.length >= limit });
     } catch (err) {
       console.error('[QQSearch]', err);
+      sendJSON(res, { provider: 'qq', error: err.message, songs: [] }, 500);
+    }
+    return;
+  }
+
+  if (pn === '/api/qq/recommendations') {
+    try {
+      const limit = Math.max(4, Math.min(30, parseInt(url.searchParams.get('limit') || '12', 10) || 12));
+      sendJSON(res, await handleQQRecommendations(limit));
+    } catch (err) {
+      console.error('[QQRecommendations]', err);
       sendJSON(res, { provider: 'qq', error: err.message, songs: [] }, 500);
     }
     return;

@@ -29,6 +29,7 @@ var homePlatformRecommendationState = {
   feeds: {
     qishui: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
     kugou: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
+    qq: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
   },
 };
 
@@ -880,6 +881,13 @@ function homePlatformRecommendationFeedConfig(source) {
       readyText: '来自酷狗 FM 推荐',
       playlistName: '酷狗推荐 FM',
     },
+    qq: {
+      endpoint: '/api/qq/recommendations?limit=12',
+      sectionTitle: '平台推荐',
+      cardLabel: 'QQ 音乐推荐',
+      readyText: '来自 QQ 音乐推荐',
+      playlistName: 'QQ 音乐推荐',
+    },
   }[source] || null;
 }
 
@@ -1047,7 +1055,11 @@ function renderHomePlatformRecommendations() {
       var sectionTitle = feedConfig.sectionTitle;
       var cardLabel = feedConfig.cardLabel;
       var readyText = feedConfig.readyText;
-      if (source === 'qishui' && feedState.fallback) {
+      if (source === 'qq' && feedState.fallback) {
+        sectionTitle = '官方热歌榜';
+        cardLabel = 'QQ 音乐热歌榜';
+        readyText = 'QQ 个性化推荐暂不可用，当前显示 QQ 音乐官方热歌榜';
+      } else if (source === 'qishui' && feedState.fallback) {
         sectionTitle = '你的音乐';
         cardLabel = '汽水喜欢 / 最近播放';
         readyText = '汽水推荐 Feed 暂不可用，当前显示你的喜欢与最近播放';
