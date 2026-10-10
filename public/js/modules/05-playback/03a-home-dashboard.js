@@ -1128,13 +1128,25 @@ function renderHomePlatformRecommendations() {
   list.innerHTML = homePlatformRecommendationEmptyHtml(source);
 }
 
+// 二改：平台推荐内容（推荐歌单 / 每日推荐 30 首）要和各平台同步更新。
+// 上游是「加载过就不再拉」，这里加过期时间：超过 5 分钟再次打开面板或切平台会重新同步。
+var HOME_PLATFORM_RECOMMEND_STALE_MS = 5 * 60 * 1000;
+function homePlatformRecommendationsAreStale(loaded, loadedAt) {
+  if (!loaded) return true;
+  if (!loadedAt) return true;
+  return (Date.now() - loadedAt) > HOME_PLATFORM_RECOMMEND_STALE_MS;
+}
+
 async function loadHomePlatformNeteaseRecommendations(force) {
   if (homePlatformRecommendationState.neteaseLoading) return;
   homePlatformRecommendationState.neteaseLoading = true;
   renderHomePlatformRecommendations();
   try {
     if (homeDiscoverState.loading && typeof waitForHomeDiscoverIdle === 'function') await waitForHomeDiscoverIdle(2600);
-    if (force || !homeDiscoverState.loaded) await loadHomeDiscover(!!force);
+    var neteaseStale = homePlatformRecommendationsAreStale(
+      homeDiscoverState.loaded, homePlatformRecommendationState.neteaseLoadedAt);
+    if (force || neteaseStale) await loadHomeDiscover(true);
+    homePlatformRecommendationState.neteaseLoadedAt = Date.now();
     if (homeDiscoverState.loading && typeof waitForHomeDiscoverIdle === 'function') await waitForHomeDiscoverIdle(2600);
     if (force || !Array.isArray(homeDiscoverState.podcasts) || !homeDiscoverState.podcasts.length) {
       var podcastData = await apiJson('/api/podcast/hot?limit=8&t=' + Date.now(), { timeoutMs: 12000 });
@@ -1157,7 +1169,7 @@ async function loadHomePlatformQishuiRecommendations(force) {
 async function loadHomePlatformQQRecommendations(force) {
   var state = homePlatformRecommendationState.qqFeed;
   if (!state || state.loading) return;
-  if (state.loaded && !force) return;
+  if (state.loaded && !force && !homePlatformRecommendationsAreStale(state.loaded, state.loadedAt)) return;
   state.loading = true;
   state.error = '';
   renderHomePlatformRecommendations();
@@ -1176,6 +1188,7 @@ async function loadHomePlatformQQRecommendations(force) {
       return item && (item.id || item.dissid) && (item.name || item.title);
     }).slice(0, 6);
     state.loaded = true;
+    state.loadedAt = Date.now();
   } catch (error) {
     state.songs = [];
     state.playlists = [];
@@ -1195,7 +1208,7 @@ async function loadHomePlatformFeedRecommendations(source, force) {
   var config = homePlatformRecommendationFeedConfig(source);
   var feedState = homePlatformRecommendationState.feeds[source];
   if (!config || !feedState || feedState.loading) return;
-  if (feedState.loaded && !force) return;
+  if (feedState.loaded && !force && !homePlatformRecommendationsAreStale(feedState.loaded, feedState.loadedAt)) return;
   feedState.loading = true;
   feedState.error = '';
   feedState.message = '';
@@ -1213,6 +1226,7 @@ async function loadHomePlatformFeedRecommendations(source, force) {
     feedState.provenance = data && data.provenance ? String(data.provenance) : '';
     feedState.toplistName = data && data.toplistName ? String(data.toplistName) : '';
     feedState.loaded = true;
+    feedState.loadedAt = Date.now();
   } catch (error) {
     console.warn('[HomePlatformFeed:' + source + ']', error);
     feedState.songs = [];

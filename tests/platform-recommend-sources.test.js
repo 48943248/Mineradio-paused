@@ -53,6 +53,25 @@ function testQQRecommendCardsAreClickable() {
   assert.ok(dashboardText.indexOf('.slice(0, 30)') >= 0, '歌曲条数上限 30');
 }
 
+function testRecommendationsSyncPerPlatform() {
+  // 回归：上游是「加载过就不再拉」，推荐内容会一直停在第一次的结果。
+  assert.ok(dashboardText.indexOf('var HOME_PLATFORM_RECOMMEND_STALE_MS') >= 0, '要有推荐内容的过期时间');
+  assert.ok(dashboardText.indexOf('function homePlatformRecommendationsAreStale(') >= 0);
+  assert.ok(dashboardText.indexOf('homePlatformRecommendationsAreStale(feedState.loaded, feedState.loadedAt)') >= 0,
+    '通用平台 feed 要按过期时间重新同步');
+  assert.ok(dashboardText.indexOf('homePlatformRecommendationsAreStale(state.loaded, state.loadedAt)') >= 0,
+    'QQ 也要按过期时间重新同步');
+  assert.ok(dashboardText.indexOf('homeDiscoverState.loaded, homePlatformRecommendationState.neteaseLoadedAt') >= 0,
+    '网易云也要按过期时间重新同步');
+  // 三个平台都要记录同步时间
+  assert.ok(dashboardText.indexOf('feedState.loadedAt = Date.now();') >= 0);
+  assert.ok(dashboardText.indexOf('state.loadedAt = Date.now();') >= 0);
+  assert.ok(dashboardText.indexOf('homePlatformRecommendationState.neteaseLoadedAt = Date.now();') >= 0);
+  // 打开面板与切换平台都会触发一次加载（过期时即重新同步）
+  assert.ok(dashboardText.indexOf('loadHomePlatformRecommendations(source, false);') >= 0);
+  assert.ok(dashboardText.indexOf('loadHomePlatformRecommendations(tab.getAttribute') >= 0);
+}
+
 function testDashboardWiring() {
   assert.ok(indexHtml.indexOf('data-home-recommend-source="qq"') >= 0, '平台推荐面板要有 QQ 标签页');
   assert.ok(dashboardText.indexOf("qq: { loading: false, loaded: false, songs: []") >= 0, '要有 QQ 的 feed 状态');
@@ -92,6 +111,7 @@ function testQQFunctionsStillIntact() {
 
 testQQRecommendationEndpoint();
 testQQRecommendCardsAreClickable();
+testRecommendationsSyncPerPlatform();
 testDashboardWiring();
 testQQFunctionsStillIntact();
 console.log('OK platform-recommend-sources');
